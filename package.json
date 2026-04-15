@@ -12,6 +12,7 @@
   "private": true,
   "packageManager": "npm@11.6.2",
   "dependencies": {
+    "@angular/animations": "^21.2.7",
     "@angular/cdk": "^21.2.5",
     "@angular/common": "^21.2.0",
     "@angular/compiler": "^21.2.0",
@@ -26,6 +27,7 @@
     "@tanstack/angular-query-experimental": "^5.96.2",
     "date-fns": "^4.1.0",
     "express": "^5.1.0",
+    "lucide-angular": "^1.0.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "zod": "^4.3.6"

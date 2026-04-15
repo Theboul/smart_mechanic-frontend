@@ -1,7 +1,7 @@
 import { patchState, signalStore, withMethods, withState } from '@ngrx/signals';
 import { inject } from '@angular/core';
 import { User } from '../schemas/auth.schema';
-import { StorageService } from '../../../../core/services/storage.service';
+import { StorageService } from '@core/services/storage.service';
 
 export interface AuthState {
   user: User | null;

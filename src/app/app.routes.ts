@@ -2,6 +2,16 @@ import { Routes } from '@angular/router';
 
 export const routes: Routes = [
   {
+    path: 'auth/login',
+    redirectTo: 'identity/auth',
+    pathMatch: 'full'
+  },
+  {
+    path: 'auth',
+    redirectTo: 'identity/auth',
+    pathMatch: 'full'
+  },
+  {
     path: 'identity',
     loadChildren: () => import('./features/identity').then(m => m.identityRoutes)
   },
@@ -30,8 +40,16 @@ export const routes: Routes = [
     loadChildren: () => import('./features/finance').then(m => m.financeRoutes)
   },
   {
+    path: 'billing',
+    loadChildren: () => import('./features/finance').then(m => m.financeRoutes)
+  },
+  {
     path: '',
-    redirectTo: 'identity',
+    redirectTo: 'identity/auth',
     pathMatch: 'full'
+  },
+  {
+    path: '**',
+    redirectTo: 'identity/auth'
   }
 ];

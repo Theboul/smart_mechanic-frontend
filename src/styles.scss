@@ -19,18 +19,65 @@ html {
   );
 }
 
+:root {
+  --sm-color-gunmetal-950: #0d0f12;
+  --sm-color-gunmetal-900: #121417;
+  --sm-color-gunmetal-850: #1c1f24;
+  --sm-color-gunmetal-825: #232831;
+  --sm-color-gunmetal-800: #2a2d34;
+
+  --sm-color-text-main: #e2e8f0;
+  --sm-color-text-soft: #94a3b8;
+  --sm-color-text-muted: #64748b;
+  --sm-color-text-title: #f8fafc;
+  --sm-color-text-label: #cbd5e1;
+  --sm-color-white: #ffffff;
+
+  --sm-color-border-metal: #334155;
+  --sm-color-input-bg: #0f1115;
+  --sm-color-input-placeholder: #475569;
+
+  --sm-color-sapphire-700: #1e3a8a;
+  --sm-color-sapphire-600: #1d4ed8;
+  --sm-color-sapphire-500: #2563eb;
+  --sm-color-sapphire-450: #1e40af;
+  --sm-color-sapphire-400: #3b82f6;
+  --sm-color-sapphire-300: #60a5fa;
+  --sm-color-sapphire-100: #dbeafe;
+  --sm-color-sapphire-050: #bfdbfe;
+
+  --sm-color-success-500: #22c55e;
+  --sm-color-success-200: #86efac;
+  --sm-color-danger-500: #ef4444;
+  --sm-color-danger-200: #fca5a5;
+  --sm-color-warning-500: #f59e0b;
+
+  --sm-rgb-black: 0 0 0;
+  --sm-rgb-white: 255 255 255;
+  --sm-rgb-slate-400: 148 163 184;
+  --sm-rgb-sapphire-700: 30 58 138;
+  --sm-rgb-sapphire-600: 29 78 216;
+  --sm-rgb-sapphire-500: 37 99 235;
+  --sm-rgb-sapphire-450: 30 64 175;
+  --sm-rgb-sapphire-400: 59 130 246;
+  --sm-rgb-success-500: 34 197 94;
+  --sm-rgb-danger-500: 239 68 68;
+  --sm-rgb-warning-500: 245 158 11;
+  --sm-rgb-navy-900: 15 23 42;
+
+  --sm-font-body: 400 0.95rem/1.5 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
 body {
   // Default the application to a light color theme. This can be changed to
   // `dark` to enable the dark color theme, or to `light dark` to defer to the
   // user's system settings.
   color-scheme: light;
 
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
-  background-color: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  font: var(--mat-sys-body-medium);
+  // Global app defaults from Smart Mechanic design tokens.
+  background-color: var(--sm-color-gunmetal-950);
+  color: var(--sm-color-text-main);
+  font: var(--sm-font-body);
 
   // Reset the user agent margin.
   margin: 0;

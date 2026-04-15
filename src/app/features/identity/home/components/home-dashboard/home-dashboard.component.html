@@ -1,0 +1,76 @@
+<section class="dashboard-shell">
+  <header class="hero-card">
+    <div class="hero-copy">
+      <p class="eyebrow">Panel Principal</p>
+      <h1>{{ title() }}</h1>
+      <p>{{ subtitle() }}</p>
+    </div>
+
+    <div class="hero-status">
+      <span class="status-dot"></span>
+      Operacion estable
+    </div>
+  </header>
+
+  <section class="kpi-grid">
+    @for (kpi of kpis(); track kpi.label) {
+      <article class="kpi-card">
+        <div class="kpi-top">
+          <span class="kpi-icon" aria-hidden="true">
+            <lucide-icon [img]="kpi.icon" [size]="16"></lucide-icon>
+          </span>
+          <span class="kpi-trend" [class.negative]="kpi.trend < 0">
+            {{ kpi.trend > 0 ? '+' : '' }}{{ kpi.trend }}%
+          </span>
+        </div>
+
+        <p class="kpi-label">{{ kpi.label }}</p>
+        <p class="kpi-value">{{ kpi.value }}</p>
+        <p class="kpi-detail">{{ kpi.detail }}</p>
+      </article>
+    }
+  </section>
+
+  <section class="content-grid">
+    <article class="panel highlights-panel">
+      <h2>Capacidades Estratégicas</h2>
+      <ul>
+        @for (highlight of highlights(); track highlight) {
+          <li>
+            <span class="bullet">✓</span>
+            <span>{{ highlight }}</span>
+          </li>
+        }
+      </ul>
+    </article>
+
+    <article class="panel alerts-panel">
+      <h2>Alertas Operativas</h2>
+      <div class="alerts-list">
+        @for (alert of alerts(); track alert.title) {
+          <div class="alert-item" [class.high]="alert.level === 'high'" [class.medium]="alert.level === 'medium'" [class.low]="alert.level === 'low'">
+            <p class="alert-title">{{ alert.title }}</p>
+            <p class="alert-description">{{ alert.description }}</p>
+          </div>
+        }
+      </div>
+    </article>
+
+    <article class="panel actions-panel">
+      <h2>Acciones Rapidas</h2>
+      <div class="actions-grid">
+        @for (action of quickActions(); track action.key) {
+          <button type="button" class="action-button" (click)="selectQuickAction(action)">
+            <span class="action-icon" aria-hidden="true">
+              <lucide-icon [img]="action.icon" [size]="16"></lucide-icon>
+            </span>
+            <span class="action-copy">
+              <span class="action-label">{{ action.label }}</span>
+              <span class="action-description">{{ action.description }}</span>
+            </span>
+          </button>
+        }
+      </div>
+    </article>
+  </section>
+</section>
