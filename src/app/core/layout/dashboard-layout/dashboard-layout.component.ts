@@ -1,10 +1,13 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { Router, RouterOutlet } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { SidebarComponent } from '@core/layout/sidebar/sidebar.component';
 import { HeaderComponent } from '@core/layout/header/header.component';
 import { AuthStore } from '@features/identity/auth/state/auth.store';
 import { NotificationService } from '@core/services/notification.service';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { map } from 'rxjs';
+import { toSignal } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-dashboard-layout',
@@ -19,17 +22,22 @@ import { NotificationService } from '@core/services/notification.service';
     <mat-sidenav-container class="layout-container">
       <!-- Sidebar (sidenav) -->
       <mat-sidenav
-        mode="side"
-        opened
+        #sidenav
+        [mode]="isMobile() ? 'over' : 'side'"
+        [opened]="isMobile() ? sidenavOpened() : true"
+        (closedStart)="sidenavOpened.set(false)"
         class="app-sidenav"
-        fixedInViewport="true"
+        [fixedInViewport]="true"
       >
-        <app-sidebar></app-sidebar>
+        <app-sidebar (menuItemClicked)="isMobile() ? sidenavOpened.set(false) : null"></app-sidebar>
       </mat-sidenav>
 
       <!-- Contenido principal -->
       <mat-sidenav-content class="layout-content">
-        <app-header></app-header>
+        <app-header 
+          [showMenuButton]="isMobile()" 
+          (menuToggled)="sidenavOpened.update(o => !o)">
+        </app-header>
         <main class="main-content">
           <router-outlet></router-outlet>
         </main>
@@ -74,7 +82,7 @@ import { NotificationService } from '@core/services/notification.service';
       flex: 1;
       overflow-y: auto;
       padding: 1.5rem 2rem;
-      max-width: 1400px;
+      width: 100%;
       background:
         linear-gradient(
           180deg,
@@ -97,6 +105,16 @@ export class DashboardLayoutComponent {
   private authStore = inject(AuthStore);
   private router = inject(Router);
   private notificationService = inject(NotificationService);
+  private breakpointObserver = inject(BreakpointObserver);
+
+  isMobile = toSignal(
+    this.breakpointObserver.observe('(max-width: 960px)').pipe(
+      map(result => result.matches)
+    ),
+    { initialValue: false }
+  );
+
+  sidenavOpened = signal(false);
 
   constructor() {
     // Guard inline: redirige si no hay sesión autenticada

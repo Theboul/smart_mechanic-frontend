@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { WorkshopsService } from '../../data-access/workshops.service';
 import { injectQuery, injectMutation, injectQueryClient } from '@tanstack/angular-query-experimental';
 import { lastValueFrom } from 'rxjs';
@@ -12,8 +13,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { FinanceService } from '@features/finance/data-access/finance.service';
-import { LucideAngularModule, ClipboardList, MapPin, Clock, CheckCircle, Search, Filter, RefreshCw, AlertTriangle, Eye, ChevronRight, User, CheckCircle2, UserCheck, Navigation, MessageSquare, Inbox, Wrench, Phone } from 'lucide-angular';
-import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from '@shared/ui';
+import { LucideAngularModule, ClipboardList, MapPin, Clock, CheckCircle, Search, Filter, RefreshCw, AlertTriangle, Eye, ChevronRight, User, CheckCircle2, UserCheck, Navigation, MessageSquare, Inbox, Wrench, Phone, Siren, Compass } from 'lucide-angular';
+import { PageHeaderComponent, LoadingStateComponent } from '@shared/ui';
 import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model';
 
 @Component({
@@ -31,320 +32,670 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
     MatDialogModule,
     LucideAngularModule,
     PageHeaderComponent,
-    LoadingStateComponent,
-    EmptyStateComponent
+    LoadingStateComponent
   ],
   template: `
-    <div class="kanban-page">
-      <div class="page-container">
-        <app-page-header 
-          title="Panel de Auxilios" 
-          subtitle="Monitoreo de incidentes en tiempo real y despacho inteligente de técnicos."
-          [icon]="assignmentsIcon">
-          <div actions>
-            <button mat-flat-button class="refresh-btn-premium" (click)="assignmentsQuery.refetch()">
-              <lucide-icon [img]="refreshIcon" [size]="16"></lucide-icon>
-              Sincronizar
-            </button>
-          </div>
-        </app-page-header>
+    <div class="page-container">
+      <app-page-header 
+        title="Panel de Auxilios" 
+        subtitle="Monitoreo de incidentes en tiempo real y despacho inteligente de técnicos."
+        [icon]="assignmentsIcon">
+      </app-page-header>
 
-        <!-- Barra de Filtros del Tablero -->
-        <div class="kanban-filters sm-glass-card">
-          <div class="search-box">
-            <lucide-icon [img]="searchIcon" [size]="16"></lucide-icon>
-            <input type="text" [ngModel]="searchQuery()" (ngModelChange)="searchQuery.set($event)" placeholder="Buscar por ID o descripción..." />
-          </div>
-          
-          <mat-form-field appearance="outline" class="filter-select">
-            <mat-label>Prioridad</mat-label>
-            <mat-select [ngModel]="filterPrioridad()" (ngModelChange)="filterPrioridad.set($event)">
-              <mat-option value="">Todas</mat-option>
-              <mat-option value="ALTA">Alta</mat-option>
-              <mat-option value="MEDIA">Media</mat-option>
-              <mat-option value="BAJA">Baja</mat-option>
-            </mat-select>
-          </mat-form-field>
+      <!-- Stats Bar -->
+      <div class="stats-bar">
+        <div class="stat-card">
+          <span class="stat-label">SOLICITUDES<br>NUEVAS</span>
+          <span class="stat-value color-red">{{ statsSolicitudesNuevas() }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">TÉCNICOS EN<br>RUTA</span>
+          <span class="stat-value color-blue">{{ statsTecnicosEnRuta() }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">EN<br>REPARACIÓN</span>
+          <span class="stat-value color-yellow">{{ statsEnReparacion() }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">COMPLETADOS<br>HOY</span>
+          <span class="stat-value color-green">{{ statsCompletadosHoy() }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">TASA DE<br>RESOLUCIÓN</span>
+          <span class="stat-value color-green">{{ statsTasaResolucion() }}%</span>
+        </div>
+      </div>
 
-          <div class="board-stats">
-            <span class="stat"><b>{{ totalActivos() }}</b> Activos</span>
-            <span class="stat"><b>{{ filteredPending().length }}</b> Pendientes</span>
-          </div>
+      <!-- Filters Bar -->
+      <div class="filters-container">
+        <div class="search-wrapper">
+          <lucide-icon [img]="searchIcon" class="search-icon"></lucide-icon>
+          <input 
+            type="text" 
+            [ngModel]="searchQuery()" 
+            (ngModelChange)="searchQuery.set($event)" 
+            placeholder="Buscar por ID o descripción..." 
+            class="search-input" />
         </div>
 
-        @if (assignmentsQuery.isLoading()) {
-          <app-loading-state message="Sincronizando órdenes de auxilio..."></app-loading-state>
-        } @else {
-          <div class="kanban-board">
-            
-            <!-- COLUMNA: SOLICITUDES ENTRANTE -->
-            <div class="kanban-column incoming">
-              <div class="column-header">
-                <lucide-icon [img]="inboxIcon" [size]="18"></lucide-icon>
-                <h2>Solicitudes Nuevas</h2>
-                <span class="count">{{ filteredPending().length }}</span>
-              </div>
-              
-              <div class="column-content">
-                @for (inc of filteredPending(); track inc.id_incidente) {
-                  <div class="kanban-card new-alert">
-                    <div class="card-priority" [attr.data-p]="inc.prioridad_incidente">
-                      {{ inc.prioridad_incidente }}
-                    </div>
-                    
-                    <div class="card-body">
-                      <div class="id-row">
-                        <span class="id-label">#{{ inc.id_incidente.substring(0,8) }}</span>
-                        <span class="time-tag">NUEVA</span>
-                      </div>
-                      
-                      <div class="ia-summary">
-                        <div class="ia-header">
-                          <lucide-icon [img]="messageIcon" [size]="12"></lucide-icon>
-                          ANÁLISIS INTELIGENTE
-                        </div>
-                        <p>{{ inc.resumen_ia || 'Analizando evidencias...' }}</p>
-                      </div>
+        <div class="filter-chips">
+          <button 
+            class="filter-chip" 
+            [class.active]="filterPrioridad() === ''" 
+            (click)="filterPrioridad.set('')">
+            <lucide-icon [img]="filterIcon" class="chip-icon"></lucide-icon>
+            Todas
+          </button>
+          <button 
+            class="filter-chip" 
+            [class.active]="filterPrioridad() === 'ALTA'" 
+            (click)="filterPrioridad.set('ALTA')">
+            Alta
+          </button>
+          <button 
+            class="filter-chip" 
+            [class.active]="filterPrioridad() === 'MEDIA'" 
+            (click)="filterPrioridad.set('MEDIA')">
+            Media
+          </button>
+          <button 
+            class="filter-chip" 
+            [class.active]="filterPrioridad() === 'BAJA'" 
+            (click)="filterPrioridad.set('BAJA')">
+            Baja
+          </button>
+        </div>
+      </div>
 
+      @if (assignmentsQuery.isLoading() && !assignmentsQuery.data()) {
+        <app-loading-state message="Sincronizando órdenes de auxilio..."></app-loading-state>
+      } @else {
+        <!-- Kanban Board -->
+        <div class="kanban-board">
+          
+          <!-- COLUMNA: SOLICITUDES NUEVAS -->
+          <div class="kanban-column col-nuevas">
+            <div class="column-header">
+              <span class="dot-indicator"></span>
+              <span class="column-title">Solicitudes Nuevas</span>
+              <span class="column-count" [class.has-items]="filteredPending().length > 0">{{ filteredPending().length }}</span>
+            </div>
+            
+            <div class="column-body">
+              @for (inc of filteredPending(); track inc.id_incidente) {
+                <div class="incident-card" (click)="onIncidentClick(inc.id_incidente)">
+                  <div class="card-header">
+                    <div class="header-left">
+                      <lucide-icon [img]="sirenIcon" class="status-icon color-red"></lucide-icon>
+                      <span class="status-text color-red">Solicitud nueva</span>
+                    </div>
+                    <span class="card-time">{{ formatTime(inc.fecha_reporte) }}</span>
+                  </div>
+                  
+                  <div class="card-body">
+                    <p class="summary">{{ inc.resumen_ia || inc.descripcion || 'Analizando evidencias...' }}</p>
+
+                    @if (inc.telefono) {
                       <div class="client-info">
                         <div class="info-item">
                           <lucide-icon [img]="phoneIcon" [size]="12"></lucide-icon>
-                          {{ inc.telefono || 'Sin contacto' }}
+                          {{ inc.telefono }}
                         </div>
                       </div>
-                    </div>
+                    }
 
-                    <div class="card-footer">
-                      <mat-form-field appearance="outline" class="full-width-select sm-dark-field">
-                        <mat-select #techSelect placeholder="Seleccionar Técnico">
-                          @for (tech of techsQuery.data(); track tech.id_tecnico) {
-                            <mat-option [value]="tech.id_tecnico" [disabled]="!tech.estado">
-                              <div class="tech-option">
-                                <span>{{ tech.nombre }}</span>
-                                @if (!tech.estado) { <span class="busy-tag">Ocupado</span> }
-                              </div>
-                            </mat-option>
-                          }
-                        </mat-select>
-                      </mat-form-field>
-                      
-                      <div class="action-buttons">
-                        <button mat-flat-button color="primary" 
-                                [disabled]="!techSelect.value || acceptMutation.isPending()"
-                                (click)="onAccept(inc.id_incidente, techSelect.value)">
-                          <div class="btn-content">
-                            @if (acceptMutation.isPending()) {
-                              <lucide-icon [img]="refreshIcon" class="spin" [size]="14"></lucide-icon>
-                            } @else {
-                              <span>ACEPTAR</span>
-                            }
-                          </div>
-                        </button>
-                        <button mat-button class="reject-btn" (click)="onReject(inc.id_incidente)">
-                          RECHAZAR
-                        </button>
-                      </div>
+                    <div class="card-footer-info">
+                      <span class="category-tag">{{ getCategory(inc) }}</span>
+                      <span class="short-code">{{ getShortCode(inc, $index) }}</span>
                     </div>
                   </div>
-                } @empty {
-                  <app-empty-state 
-                    [icon]="assignmentsIcon" 
-                    title="Todo despejado" 
-                    message="No hay incidentes pendientes. Buen trabajo.">
-                  </app-empty-state>
-                }
-              </div>
+
+                  <div class="card-footer-actions" (click)="$event.stopPropagation()">
+                    <mat-form-field appearance="outline" class="full-width-select sm-dark-field">
+                      <mat-select #techSelect placeholder="Seleccionar Técnico">
+                        @for (tech of techsQuery.data(); track tech.id_tecnico) {
+                          <mat-option [value]="tech.id_tecnico" [disabled]="!tech.estado">
+                            <div class="tech-option">
+                              <span>{{ tech.nombre }}</span>
+                              @if (!tech.estado) { <span class="busy-tag">Ocupado</span> }
+                            </div>
+                          </mat-option>
+                        }
+                      </mat-select>
+                    </mat-form-field>
+                    
+                    <div class="action-buttons">
+                      <button mat-flat-button color="primary" 
+                              [disabled]="!techSelect.value || acceptMutation.isPending()"
+                              (click)="onAccept(inc.id_incidente, techSelect.value)">
+                        <div class="btn-content">
+                          @if (acceptMutation.isPending()) {
+                            <lucide-icon [img]="refreshIcon" class="spin" [size]="14"></lucide-icon>
+                          } @else {
+                            <span>ACEPTAR</span>
+                          }
+                        </div>
+                      </button>
+                      <button mat-button class="reject-btn" (click)="onReject(inc.id_incidente)">
+                        RECHAZAR
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              } @empty {
+                <div class="empty-column-state">
+                  <lucide-icon [img]="inboxIcon" class="empty-icon"></lucide-icon>
+                  <div class="empty-title">Todo despejado.</div>
+                  <div class="empty-subtitle">Buen trabajo.</div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- COLUMNA: TÉCNICO EN RUTA -->
+          <div class="kanban-column col-ruta">
+            <div class="column-header">
+              <span class="dot-indicator"></span>
+              <span class="column-title">Técnico en Ruta</span>
+              <span class="column-count" [class.has-items]="filteredEnCamino().length > 0">{{ filteredEnCamino().length }}</span>
             </div>
 
-            <!-- COLUMNA: EN CAMINO -->
-            <div class="kanban-column on-way">
-              <div class="column-header">
-                <lucide-icon [img]="navigationIcon" [size]="18"></lucide-icon>
-                <h2>Técnico en Ruta</h2>
-                <span class="count">{{ filteredEnCamino().length }}</span>
-              </div>
+            <div class="column-body">
+              @for (inc of filteredEnCamino(); track inc.id_incidente) {
+                <div class="incident-card" (click)="onIncidentClick(inc.id_incidente)">
+                  <div class="card-header">
+                    <div class="header-left">
+                      <lucide-icon [img]="compassIcon" class="status-icon color-blue"></lucide-icon>
+                      <span class="status-text color-blue">{{ inc.estado_incidente === 'EN_CAMINO' ? 'Técnico en camino' : 'Técnico asignado' }}</span>
+                    </div>
+                    <span class="card-time">{{ formatTime(inc.fecha_reporte) }}</span>
+                  </div>
 
-              <div class="column-content">
-                @for (inc of filteredEnCamino(); track inc.id_incidente) {
-                  <div class="kanban-card border-blue">
-                    <div class="card-body">
-                      <div class="status-indicator">EN CAMINO</div>
-                      <p class="summary">{{ inc.resumen_ia }}</p>
-                      
+                  <div class="card-body">
+                    <p class="summary">{{ inc.resumen_ia || inc.descripcion }}</p>
+                    
+                    @if (inc.technician_name) {
                       <div class="assigned-tech">
                         <lucide-icon [img]="userIcon" [size]="12"></lucide-icon>
-                        <span>Técnico asignado</span>
+                        <span>Técnico: {{ inc.technician_name }}</span>
                       </div>
-                    </div>
+                    }
 
-                    <div class="card-footer single-action">
-                      <button mat-stroked-button color="primary" (click)="onUpdateStatus(inc.id_incidente, 'EN_PROGRESO')">
-                        CONFIRMAR LLEGADA
-                      </button>
-                    </div>
-                  </div>
-                } @empty {
-                  <div class="empty-placeholder"><p>No hay técnicos en ruta</p></div>
-                }
-              </div>
-            </div>
-
-            <!-- COLUMNA: EN REPARACIÓN -->
-            <div class="kanban-column in-progress">
-              <div class="column-header">
-                <lucide-icon [img]="wrenchIcon" [size]="18"></lucide-icon>
-                <h2>En Reparación</h2>
-                <span class="count">{{ filteredInProgress().length }}</span>
-              </div>
-
-              <div class="column-content">
-                @for (inc of filteredInProgress(); track inc.id_incidente) {
-                  <div class="kanban-card border-purple">
-                    <div class="card-body">
-                      <div class="status-indicator purple">TRABAJANDO...</div>
-                      <p class="summary">{{ inc.resumen_ia }}</p>
-                    </div>
-
-                    <div class="card-footer single-action">
-                      <button mat-flat-button color="accent" (click)="onFinalizeService(inc.id_incidente)">
-                        FINALIZAR Y LIBERAR
-                      </button>
+                    <div class="card-footer-info">
+                      <span class="category-tag">{{ getCategory(inc) }}</span>
+                      <span class="short-code">{{ getShortCode(inc, $index) }}</span>
                     </div>
                   </div>
-                } @empty {
-                  <div class="empty-placeholder"><p>Sin trabajos activos en taller</p></div>
-                }
-              </div>
-            </div>
 
-            <!-- COLUMNA: FINALIZADOS HOY -->
-            <div class="kanban-column done">
-              <div class="column-header">
-                <lucide-icon [img]="doneIcon" [size]="18"></lucide-icon>
-                <h2>Completados</h2>
-                <span class="count">{{ filteredCompleted().length }}</span>
-              </div>
-
-              <div class="column-content">
-                @for (inc of filteredCompleted(); track inc.id_incidente) {
-                  <div class="kanban-card card-done">
-                    <div class="card-body">
-                      <div class="done-check">
-                        <lucide-icon [img]="doneIcon" [size]="16"></lucide-icon>
-                        Servicio Finalizado
-                      </div>
-                      <p class="summary-muted">{{ inc.resumen_ia }}</p>
-                      <div class="date-tag">{{ inc.fecha_reporte | date:'shortTime' }}</div>
-                    </div>
+                  <div class="card-footer-actions" (click)="$event.stopPropagation()">
+                    <button mat-stroked-button color="primary" class="full-width-btn" (click)="onUpdateStatus(inc.id_incidente, 'EN_PROGRESO')">
+                      CONFIRMAR LLEGADA
+                    </button>
                   </div>
-                } @empty {
-                  <div class="empty-placeholder"><p>No hay cierres recientes</p></div>
-                }
-              </div>
+                </div>
+              } @empty {
+                <div class="empty-column-state">
+                  <lucide-icon [img]="mapPinIcon" class="empty-icon"></lucide-icon>
+                  <div class="empty-title">No hay técnicos</div>
+                  <div class="empty-subtitle">en ruta</div>
+                </div>
+              }
             </div>
-
           </div>
-        }
-      </div>
+
+          <!-- COLUMNA: EN REPARACIÓN -->
+          <div class="kanban-column col-reparacion">
+            <div class="column-header">
+              <span class="dot-indicator"></span>
+              <span class="column-title">En Reparación</span>
+              <span class="column-count" [class.has-items]="filteredInProgress().length > 0">{{ filteredInProgress().length }}</span>
+            </div>
+
+            <div class="column-body">
+              @for (inc of filteredInProgress(); track inc.id_incidente) {
+                <div class="incident-card" (click)="onIncidentClick(inc.id_incidente)">
+                  <div class="card-header">
+                    <div class="header-left">
+                      <lucide-icon [img]="clockIcon" class="status-icon color-yellow"></lucide-icon>
+                      <span class="status-text color-yellow">En reparación</span>
+                    </div>
+                    <span class="card-time">{{ formatTime(inc.fecha_reporte) }}</span>
+                  </div>
+
+                  <div class="card-body">
+                    <p class="summary">{{ inc.resumen_ia || inc.descripcion }}</p>
+
+                    @if (inc.technician_name) {
+                      <div class="assigned-tech">
+                        <lucide-icon [img]="userIcon" [size]="12"></lucide-icon>
+                        <span>Técnico: {{ inc.technician_name }}</span>
+                      </div>
+                    }
+
+                    <div class="card-footer-info">
+                      <span class="category-tag">{{ getCategory(inc) }}</span>
+                      <span class="short-code">{{ getShortCode(inc, $index) }}</span>
+                    </div>
+                  </div>
+
+                  <div class="card-footer-actions" (click)="$event.stopPropagation()">
+                    <button mat-flat-button color="accent" class="full-width-btn" (click)="onFinalizeService(inc.id_incidente)">
+                      FINALIZAR Y LIBERAR
+                    </button>
+                  </div>
+                </div>
+              } @empty {
+                <div class="empty-column-state">
+                  <lucide-icon [img]="wrenchIcon" class="empty-icon"></lucide-icon>
+                  <div class="empty-title">Sin trabajos</div>
+                  <div class="empty-subtitle">activos en taller</div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- COLUMNA: FINALIZADOS -->
+          <div class="kanban-column col-completados">
+            <div class="column-header">
+              <span class="dot-indicator"></span>
+              <span class="column-title">Completados</span>
+              <span class="column-count" [class.has-items]="filteredCompleted().length > 0">{{ filteredCompleted().length }}</span>
+            </div>
+
+            <div class="column-body">
+              @for (inc of filteredCompleted(); track inc.id_incidente) {
+                <div class="incident-card completed-card" (click)="onIncidentClick(inc.id_incidente)">
+                  <div class="card-header">
+                    <div class="header-left">
+                      <lucide-icon [img]="doneIcon" class="status-icon color-green"></lucide-icon>
+                      <span class="status-text color-green">Servicio finalizado</span>
+                    </div>
+                    <span class="card-time">{{ formatTime(inc.fecha_reporte) }}</span>
+                  </div>
+
+                  <div class="card-body">
+                    <p class="summary-muted">{{ inc.resumen_ia || inc.descripcion }}</p>
+                    
+                    <div class="card-footer-info">
+                      <span class="category-tag">{{ getCategory(inc) }}</span>
+                      <span class="short-code">{{ getShortCode(inc, $index) }}</span>
+                    </div>
+                  </div>
+                </div>
+              } @empty {
+                <div class="empty-column-state">
+                  <lucide-icon [img]="doneIcon" class="empty-icon"></lucide-icon>
+                  <div class="empty-title">Sin cierres recientes</div>
+                </div>
+              }
+            </div>
+          </div>
+
+        </div>
+      }
     </div>
   `,
   styles: [`
-    .kanban-page { 
-      height: calc(100vh - 64px); display: flex; flex-direction: column; background: radial-gradient(circle at top right, #0f172a, #020617); 
+    .page-container {
+      animation: fadeIn 0.4s ease-out;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      width: 100%;
+      padding-bottom: 3rem;
     }
-    .page-container { padding: 2rem; max-width: 1800px; margin: 0 auto; animation: fadeIn 0.4s ease-out; display: flex; flex-direction: column; height: 100%; }
 
-    .kanban-filters {
-      margin: 1rem 0 2rem; padding: 1rem 1.5rem; display: flex; align-items: center; gap: 1.5rem;
+
+    /* Stats Bar */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1rem;
+      width: 100%;
+    }
+    .stat-card {
+      background: rgba(25, 30, 45, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      padding: 1.25rem;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      .stat-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--sm-color-text-muted, #7f8c8d);
+        line-height: 1.3;
+      }
+      .stat-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        line-height: 1.2;
+        &.color-red { color: #ff5b5b; }
+        &.color-blue { color: #3b82f6; }
+        &.color-yellow { color: #f1c40f; }
+        &.color-green { color: #2ecc71; }
+      }
+    }
+
+    /* Filters Bar */
+    .filters-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.5rem;
+      width: 100%;
+      flex-wrap: wrap;
+    }
+    .search-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 250px;
+      max-width: 450px;
+      .search-icon {
+        position: absolute;
+        left: 1rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--sm-color-text-muted, #7f8c8d);
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+      }
+      .search-input {
+        width: 100%;
+        background: rgba(25, 30, 45, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 24px;
+        padding: 0.75rem 1rem 0.75rem 2.5rem;
+        color: #ffffff;
+        font-size: 0.85rem;
+        outline: none;
+        transition: border-color 0.25s, box-shadow 0.25s;
+        &:focus {
+          border-color: rgba(59, 130, 246, 0.5);
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+        }
+        &::placeholder {
+          color: var(--sm-color-text-muted, #7f8c8d);
+        }
+      }
+    }
+    .filter-chips {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .filter-chip {
+      background: rgba(25, 30, 45, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--sm-color-text-soft, #bdc3c7);
+      padding: 0.5rem 1.1rem;
       border-radius: 20px;
-      .search-box { display: flex; align-items: center; gap: 0.75rem; flex: 1; max-width: 400px; background: rgba(255,255,255,0.03); padding: 0.6rem 1.2rem; border-radius: 14px; border: 1px solid rgba(255,255,255,0.08);
-        input { background: none; border: none; color: white; outline: none; font-size: 0.9rem; width: 100%; &::placeholder { color: rgba(255,255,255,0.3); } }
-        lucide-icon { color: var(--sm-color-sapphire-400); }
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.25s ease;
+      .chip-icon {
+        width: 14px;
+        height: 14px;
+        color: inherit;
+        display: flex;
+        align-items: center;
       }
-      .filter-select { height: 48px; width: 150px; font-size: 0.85rem; }
-      .board-stats { margin-left: auto; display: flex; gap: 1.5rem; .stat { font-size: 0.8rem; color: var(--sm-color-text-soft); b { color: var(--sm-color-sapphire-400); margin-right: 0.2rem; } } }
+      &:hover {
+        background: rgba(255, 255, 255, 0.05);
+        color: #ffffff;
+      }
+      &.active {
+        background: rgba(59, 130, 246, 0.1);
+        border-color: #3b82f6;
+        color: #3b82f6;
+      }
     }
 
+    /* Kanban Board Layout */
     .kanban-board {
-      flex: 1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; overflow: hidden; padding-bottom: 1rem;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+      padding-bottom: 1.5rem;
     }
-
     .kanban-column {
-      display: flex; flex-direction: column; background: rgba(255,255,255,0.015); border-radius: 24px; border: 1px solid rgba(255,255,255,0.05); overflow: hidden;
+      display: flex; flex-direction: column; background: rgba(18, 20, 28, 0.35); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; overflow: hidden;
       
-      .column-header {
-        padding: 1.25rem; display: flex; align-items: center; gap: 0.8rem; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.05);
-        h2 { margin: 0; font-size: 0.8rem; font-weight: 800; color: white; flex: 1; text-transform: uppercase; letter-spacing: 0.1em; }
-        .count { padding: 0.2rem 0.75rem; border-radius: 10px; font-size: 0.75rem; font-weight: 900; background: rgba(255,255,255,0.05); color: var(--sm-color-text-soft); }
-      }
-
-      &.incoming { border-top: 4px solid #f87171; .column-header lucide-icon { color: #f87171; } .count { background: rgba(248,113,113,0.1); color: #f87171; } }
-      &.on-way { border-top: 4px solid #60a5fa; .column-header lucide-icon { color: #60a5fa; } .count { background: rgba(96,165,250,0.1); color: #60a5fa; } }
-      &.in-progress { border-top: 4px solid #fbbf24; .column-header lucide-icon { color: #fbbf24; } .count { background: rgba(251,191,36,0.1); color: #fbbf24; } }
-      &.done { border-top: 4px solid #34d399; .column-header lucide-icon { color: #34d399; } .count { background: rgba(52,211,153,0.1); color: #34d399; } }
+      /* Accent Column Headers */
+      &.col-nuevas { border-top: 4px solid #ff5b5b; .dot-indicator { background: #ff5b5b; } }
+      &.col-ruta { border-top: 4px solid #3b82f6; .dot-indicator { background: #3b82f6; } }
+      &.col-reparacion { border-top: 4px solid #f1c40f; .dot-indicator { background: #f1c40f; } }
+      &.col-completados { border-top: 4px solid #2ecc71; .dot-indicator { background: #2ecc71; } }
     }
-
-    .column-content {
-      flex: 1; padding: 1rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1rem;
+    .column-header {
+      padding: 1.1rem 1.25rem 0.75rem; display: flex; align-items: center; gap: 0.6rem; border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      .dot-indicator { width: 6px; height: 6px; border-radius: 50%; }
+      .column-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--sm-color-text-soft, #bdc3c7); }
+      .column-count {
+        margin-left: auto;
+        background: rgba(255, 255, 255, 0.05);
+        color: #94a3b8;
+        font-size: 0.72rem;
+        font-weight: 700;
+        padding: 0.15rem 0.55rem;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        transition: all 0.25s ease;
+        
+        &.has-items {
+          background: rgba(59, 130, 246, 0.2);
+          color: #60a5fa;
+          border-color: rgba(59, 130, 246, 0.25);
+        }
+      }
+    }
+    .column-body {
+      padding: 1rem 0.8rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 760px;
+      overflow-y: auto;
       &::-webkit-scrollbar { width: 4px; }
       &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
     }
 
-    .kanban-card {
-      background: rgba(30, 41, 59, 0.4); border-radius: 18px; border: 1px solid rgba(255,255,255,0.06); backdrop-filter: blur(8px); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      &:hover { border-color: rgba(var(--sm-rgb-sapphire-400), 0.4); transform: translateY(-4px) scale(1.01); box-shadow: 0 12px 24px -8px rgba(0,0,0,0.5); }
-      &.new-alert { animation: slideIn 0.4s ease-out; box-shadow: 0 0 20px -5px rgba(248,113,113,0.2); }
-      &.card-done { opacity: 0.6; }
+    /* Empty Column States */
+    .empty-column-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4rem 1rem; gap: 0.5rem; color: var(--sm-color-text-muted, #7f8c8d);
+      .empty-icon { width: 32px; height: 32px; opacity: 0.35; margin-bottom: 0.25rem; }
+      .empty-title { font-size: 0.88rem; font-weight: 600; color: var(--sm-color-text-soft, #bdc3c7); }
+      .empty-subtitle { font-size: 0.78rem; opacity: 0.8; }
     }
 
-    .card-priority {
-      position: absolute; top: 0.75rem; right: 0.75rem; font-size: 0.6rem; font-weight: 900; padding: 0.15rem 0.4rem; border-radius: 4px;
-      &[data-p="ALTA"] { background: rgba(231,76,60,0.15); color: #e74c3c; }
-      &[data-p="MEDIA"] { background: rgba(241,196,15,0.15); color: #f1c40f; }
-      &[data-p="BAJA"] { background: rgba(46,204,113,0.15); color: #2ecc71; }
-    }
-
-    .card-body {
-      padding: 1rem;
-      .id-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; 
-        .id-label { font-family: monospace; color: var(--sm-color-sapphire-400); font-size: 0.75rem; font-weight: 700; }
-        .time-ago { font-size: 0.65rem; color: var(--sm-color-text-muted); }
+    /* Incident Cards styling */
+    .incident-card {
+      background: rgba(25, 30, 45, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      cursor: pointer;
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+      
+      &:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        background: rgba(25, 30, 45, 0.75);
+        border-color: rgba(255, 255, 255, 0.12);
       }
-      .status-indicator { font-size: 0.6rem; font-weight: 800; color: #3498db; margin-bottom: 0.5rem; letter-spacing: 0.05em;
-        &.purple { color: #9b59b6; }
+      &.completed-card {
+        opacity: 0.65;
+        cursor: default;
+        &:hover {
+          transform: none;
+          box-shadow: none;
+          background: rgba(25, 30, 45, 0.55);
+          border-color: rgba(255, 255, 255, 0.06);
+        }
       }
-    }
-
-    .ia-summary {
-      background: rgba(255,255,255,0.03); padding: 0.6rem; border-radius: 6px; margin-bottom: 0.75rem;
-      .ia-header { font-size: 0.6rem; font-weight: 800; color: var(--sm-color-sapphire-400); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.3rem; }
-      p { margin: 0; font-size: 0.8rem; line-height: 1.4; color: #d1d5db; }
-    }
-
-    .summary { font-size: 0.82rem; color: white; line-height: 1.4; margin: 0; }
-    .summary-muted { font-size: 0.75rem; color: var(--sm-color-text-soft); margin: 0; }
-
-    .client-info { display: flex; gap: 1rem; .info-item { display: flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; color: var(--sm-color-text-soft); } }
-
-    .assigned-tech { display: flex; align-items: center; gap: 0.4rem; font-size: 0.7rem; color: #3498db; margin-top: 0.75rem; font-weight: 600; }
-
-    .card-footer {
-      padding: 0.75rem 1rem 1rem; border-top: 1px solid rgba(255,255,255,0.05);
-      .full-width-select { width: 100%; font-size: 0.8rem; }
-      .action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; 
-        button { font-size: 0.7rem; font-weight: 700; height: 34px; }
+      .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
       }
-      &.single-action button { width: 100%; font-weight: 700; height: 36px; font-size: 0.75rem; }
+      .header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      .status-icon {
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+      }
+      .status-text {
+        font-size: 0.82rem;
+        font-weight: 700;
+      }
+      .card-time {
+        font-size: 0.82rem;
+        color: var(--sm-color-text-muted, #7f8c8d);
+      }
+      
+      .card-body {
+        font-size: 0.92rem;
+        line-height: 1.45;
+        color: var(--sm-color-text-soft, #bdc3c7);
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+        p { margin: 0; }
+        .client-info {
+          display: flex;
+          gap: 1.25rem;
+          .info-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            font-size: 0.78rem;
+            color: var(--sm-color-text-muted);
+          }
+        }
+        .summary {
+          font-size: 0.92rem;
+          color: #e2e8f0;
+          line-height: 1.45;
+          margin: 0;
+        }
+        .summary-muted {
+          font-size: 0.9rem;
+          color: var(--sm-color-text-soft);
+          line-height: 1.45;
+          margin: 0;
+        }
+        .assigned-tech {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          font-size: 0.78rem;
+          color: #3498db;
+          font-weight: 600;
+        }
+        .card-footer-info {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-top: 0.5rem;
+        }
+      }
+
+      /* Actions container in footer of the card */
+      .card-footer-actions {
+        margin-top: 0.5rem;
+        padding-top: 0.85rem;
+        border-top: 1px solid rgba(255,255,255,0.05);
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+        .full-width-select {
+          width: 100%;
+          font-size: 0.85rem;
+        }
+        .action-buttons {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.65rem; 
+          button {
+            font-size: 0.72rem;
+            font-weight: 700;
+            height: 36px;
+          }
+          .reject-btn {
+            border: 1px solid rgba(255,255,255,0.08);
+            color: var(--sm-color-text-soft);
+            &:hover { background: rgba(255,255,255,0.03); }
+          }
+        }
+        .full-width-btn {
+          width: 100%;
+          font-size: 0.78rem;
+          font-weight: 700;
+          height: 38px;
+        }
+      }
+      
+      /* Colors */
+      .color-red { color: #ff5b5b; }
+      .color-blue { color: #3b82f6; }
+      .color-yellow { color: #f1c40f; }
+      .color-green { color: #2ecc71; }
     }
 
-    .done-check { display: flex; align-items: center; gap: 0.4rem; color: #2ecc71; font-size: 0.75rem; font-weight: 700; margin-bottom: 0.4rem; }
-    .date-tag { font-size: 0.65rem; color: var(--sm-color-text-muted); margin-top: 0.5rem; text-align: right; }
+    .col-nuevas .incident-card { border-left: 4px solid #ff5b5b; }
+    .col-ruta .incident-card { border-left: 4px solid #3b82f6; }
+    .col-reparacion .incident-card { border-left: 4px solid #f1c40f; }
+    .col-completados .incident-card { border-left: 4px solid #2ecc71; }
 
-    .empty-placeholder { padding: 3rem 1rem; text-align: center; color: var(--sm-color-text-muted); p { font-size: 0.75rem; margin-top: 0.5rem; } }
+    .category-tag {
+      background: rgba(255, 255, 255, 0.05);
+      color: #cbd5e1;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.3rem 0.8rem;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .short-code {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #3b82f6; /* Blue background */
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 0.78rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .tech-option { display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 0.78rem;
+      .busy-tag { font-size: 0.58rem; color: #ff5b5b; background: rgba(255, 91, 91, 0.1); padding: 0.12rem 0.35rem; border-radius: 4px; font-weight: 700; }
+    }
 
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(46, 204, 113, 0); } 100% { box-shadow: 0 0 0 0 rgba(46, 204, 113, 0); } }
-    @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
   `]
 })
 export class WorkshopAssignments {
@@ -353,6 +704,7 @@ export class WorkshopAssignments {
   private snackBar = inject(MatSnackBar);
   private queryClient = injectQueryClient();
   private dialog = inject(MatDialog);
+  private router = inject(Router);
   
   @ViewChild('alertSound') alertSound!: ElementRef<HTMLAudioElement>;
 
@@ -370,6 +722,11 @@ export class WorkshopAssignments {
   protected readonly searchIcon = Search;
   protected readonly phoneIcon = Phone;
   protected readonly userIcon = User;
+  protected readonly compassIcon = Compass;
+  protected readonly sirenIcon = Siren;
+  protected readonly filterIcon = Filter;
+  protected readonly clockIcon = Clock;
+  protected readonly mapPinIcon = MapPin;
 
   // Filtros (Signals para reactividad)
   searchQuery = signal('');
@@ -393,15 +750,27 @@ export class WorkshopAssignments {
       const q = this.searchQuery().toLowerCase();
       const matchSearch = q ? 
         (inc.id_incidente.toLowerCase().includes(q) || 
-         inc.resumen_ia?.toLowerCase().includes(q)) : true;
-      const matchPriority = this.filterPrioridad() ? inc.prioridad_incidente === this.filterPrioridad() : true;
+         inc.resumen_ia?.toLowerCase().includes(q) ||
+         inc.descripcion?.toLowerCase().includes(q)) : true;
+      
+      const priority = (inc.prioridad_incidente || '').trim().toUpperCase();
+      const filter = this.filterPrioridad().trim().toUpperCase();
+      
+      let matchPriority = true;
+      if (filter) {
+        if (filter === 'ALTA') {
+          matchPriority = (priority === 'ALTA' || priority === 'CRITICA');
+        } else {
+          matchPriority = (priority === filter);
+        }
+      }
       return matchSearch && matchPriority;
     });
   }
 
   filteredPending = computed(() => 
     this.applyBaseFilters(this.assignmentsQuery.data() || []).filter(i => 
-      ['TALLER_ASIGNADO', 'ASIGNADO', 'ANALIZADO'].includes(i.estado_incidente)
+      ['TALLER_ASIGNADO', 'ASIGNADO', 'ANALIZADO', 'PENDIENTE', 'DATOS_INCOMPLETOS'].includes(i.estado_incidente)
     )
   );
 
@@ -422,6 +791,83 @@ export class WorkshopAssignments {
   totalActivos = computed(() => 
     this.filteredEnCamino().length + this.filteredInProgress().length
   );
+
+  // Stats calculados para las tarjetas superiores (NUEVO)
+  statsSolicitudesNuevas = computed(() => 
+    (this.assignmentsQuery.data() || []).filter(i => 
+      ['TALLER_ASIGNADO', 'ASIGNADO', 'ANALIZADO', 'PENDIENTE', 'DATOS_INCOMPLETOS'].includes(i.estado_incidente)
+    ).length
+  );
+
+  statsTecnicosEnRuta = computed(() => 
+    (this.assignmentsQuery.data() || []).filter(i => 
+      ['ACEPTADO', 'EN_CAMINO', 'TECNICO_ASIGNADO'].includes(i.estado_incidente)
+    ).length
+  );
+
+  statsEnReparacion = computed(() => 
+    (this.assignmentsQuery.data() || []).filter(i => i.estado_incidente === 'EN_PROGRESO').length
+  );
+
+  statsCompletadosHoy = computed(() => 
+    (this.assignmentsQuery.data() || []).filter(i => i.estado_incidente === 'COMPLETADO').length
+  );
+
+  statsTasaResolucion = computed(() => {
+    const newCount = this.statsSolicitudesNuevas();
+    const routeCount = this.statsTecnicosEnRuta();
+    const progressCount = this.statsEnReparacion();
+    const completedCount = this.statsCompletadosHoy();
+    const total = newCount + routeCount + progressCount + completedCount;
+    if (total === 0) return 100;
+    return Math.round((completedCount / total) * 100);
+  });
+
+  // Métodos auxiliares de diseño (NUEVO)
+  getCategory(inc: IncidentResponse): string {
+    const text = ((inc.descripcion || '') + ' ' + (inc.resumen_ia || '')).toLowerCase();
+    if (text.includes('llanta') || text.includes('pincha') || text.includes('neumat') || text.includes('rueda')) {
+      return 'Neumático';
+    }
+    if (text.includes('bater') || text.includes('arranc') || text.includes('electric')) {
+      return 'Batería';
+    }
+    if (text.includes('freno') || text.includes('frenad')) {
+      return 'Frenos';
+    }
+    if (text.includes('motor') || text.includes('aceite') || text.includes('refrigeran') || text.includes('calenta')) {
+      return 'Motor';
+    }
+    if (text.includes('choque') || text.includes('colis') || text.includes('accident') || text.includes('golpe')) {
+      return 'Choque';
+    }
+    return 'Mecánica';
+  }
+
+  getShortCode(inc: IncidentResponse, index: number): string {
+    const firstLetter = inc.prioridad_incidente?.substring(0, 1).toUpperCase() || 'M';
+    const hash = (inc.id_incidente || '').split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0);
+    const num = (hash % 9) + 1;
+    return `${firstLetter}${num}`;
+  }
+
+  formatTime(dateString?: string): string {
+    if (!dateString) return '';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      }).toUpperCase();
+    } catch {
+      return '';
+    }
+  }
+
+  onIncidentClick(id: string) {
+    this.router.navigate(['/emergencies/details', id]);
+  }
 
   constructor() {}
 

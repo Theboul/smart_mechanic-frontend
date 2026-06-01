@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject } from '@angular/core';
+import { Component, signal, computed, inject, Output, EventEmitter } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
 import { AuthStore } from '@features/identity/auth/state/auth.store';
 import { MatListModule } from '@angular/material/list';
@@ -93,6 +93,7 @@ interface MenuItem {
                   [routerLink]="child.path"
                   routerLinkActive="active-link"
                   class="sub-item"
+                  (click)="menuItemClicked.emit()"
                 >
                   <span matListItemTitle>{{ child.label }}</span>
                 </a>
@@ -102,16 +103,6 @@ interface MenuItem {
         }
       </mat-accordion>
     </nav>
-
-    <!-- Botón flotante móvil -->
-    <button
-      mat-fab
-      class="mobile-fab"
-      (click)="isMobileMenuOpen.update(v => !v)"
-      aria-label="Abrir menú"
-    >
-      <lucide-icon [img]="isMobileMenuOpen() ? closeIcon : menuIcon" [size]="18" aria-hidden="true"></lucide-icon>
-    </button>
   `,
   styles: [`
     :host {
@@ -300,12 +291,11 @@ interface MenuItem {
 })
 export class SidebarComponent {
   authStore = inject(AuthStore);
-  isMobileMenuOpen = signal(false);
+  
+  @Output() menuItemClicked = new EventEmitter<void>();
 
   protected readonly dashboardIcon = LayoutDashboard;
   protected readonly subItemIcon = Circle;
-  protected readonly menuIcon = Menu;
-  protected readonly closeIcon = X;
 
   // --- BLOQUE COMÚN ---
   private readonly menuInicio: MenuItem = {
@@ -352,16 +342,6 @@ export class SidebarComponent {
   };
 
   // --- BLOQUES DE MENÚ PARA ADMIN TALLER ---
-  private readonly menuIdentidadTaller: MenuItem = {
-    label: 'Onboarding y Gestión de Identidad',
-    icon: User,
-    children: [
-      { label: 'Gestionar perfil', path: '/identity/home/profile' },
-      { label: 'Gestionar usuarios de taller', path: '/identity/onboarding/users' },
-      { label: 'Registrar taller', path: '/workshops/register' },
-    ],
-  };
-
   private readonly menuOperacionTaller: MenuItem = {
     label: 'Operación de Talleres',
     icon: Wrench,
@@ -395,9 +375,33 @@ export class SidebarComponent {
     const role = (user?.rol_nombre || '').toLowerCase().trim();
 
     if (role === 'admin_taller' || role === 'admin' || role === 'taller') {
+      const isOwner = user?.rol_contexto === 'owner';
+      const isBranchAdmin = user?.rol_contexto === 'admin_sucursal';
+
+      const children: MenuItem[] = [
+        { label: 'Gestionar usuarios de taller', path: '/identity/onboarding/users' }
+      ];
+
+      if (isOwner) {
+        children.push({ label: 'Gestionar taller', path: '/workshops/register' });
+        children.push({ label: 'Gestionar talleres', path: '/workshops/branches' });
+      } else if (isBranchAdmin) {
+        children.push({ label: 'Configurar mi sucursal', path: '/workshops/my-branch' });
+      } else {
+        // Fallback de seguridad
+        children.push({ label: 'Gestionar taller', path: '/workshops/register' });
+        children.push({ label: 'Gestionar talleres', path: '/workshops/branches' });
+        children.push({ label: 'Configurar mi sucursal', path: '/workshops/my-branch' });
+      }
+
+      const menuIdentidadTallerSeg: MenuItem = {
+        label: 'Onboarding y Gestión de Identidad',
+        icon: User,
+        children
+      };
+
       return [
-        this.menuInicio,
-        this.menuIdentidadTaller,
+        menuIdentidadTallerSeg,
         this.menuOperacionTaller,
         this.menuMonitoreoTaller,
         this.menuFinanzasTaller
@@ -406,7 +410,6 @@ export class SidebarComponent {
 
     if (role === 'superadmin' || role === 'admin_sistema' || role === 'root') {
       return [
-        this.menuInicio,
         this.menuAdminPlataforma,
         this.menuIdentidadSuper,
         this.menuMonitoreoSuper,

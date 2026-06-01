@@ -39,6 +39,14 @@ export const workshopsRoutes: Routes = [
         loadComponent: () => import('./pages/manage-team/manage-team.component').then(m => m.ManageTeamComponent),
       },
       {
+        path: 'branches',
+        loadComponent: () => import('./pages/branch-management/branch-management.component').then(m => m.BranchManagementComponent),
+      },
+      {
+        path: 'my-branch',
+        loadComponent: () => import('./pages/my-branch-settings/my-branch-settings.component').then(m => m.MyBranchSettingsComponent),
+      },
+      {
         path: 'calendar',
         data: {
           placeholder: {

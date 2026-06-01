@@ -1,51 +1,105 @@
-<form [formGroup]="workshopForm" (ngSubmit)="onSubmit()" class="workshop-form">
-  <mat-form-field appearance="outline" class="full-width">
-    <mat-label>Nombre del Taller</mat-label>
-    <input matInput formControlName="nombre" placeholder="Ej: Taller Central">
-  </mat-form-field>
+<form [formGroup]="workshopForm" (ngSubmit)="onSubmit()" class="premium-form-layout">
+  <div class="form-grid-layout">
+    <!-- Nombre del taller -->
+    <div class="form-field-group full-width">
+      <label class="field-label">Nombre del taller *</label>
+      <mat-form-field class="sm-capsule-field" appearance="outline" subscriptSizing="dynamic">
+        <input matInput formControlName="nombre" placeholder="Ej: Taller El Rayo McQueen">
+      </mat-form-field>
+    </div>
 
-  <mat-form-field appearance="outline" class="full-width">
-    <mat-label>NIT</mat-label>
-    <input matInput formControlName="nit" placeholder="Ej: 1234567-8">
-  </mat-form-field>
+    <!-- NIT y Teléfono -->
+    <div class="form-field-group">
+      <label class="field-label">NIT *</label>
+      <mat-form-field class="sm-capsule-field" appearance="outline" subscriptSizing="dynamic">
+        <input matInput formControlName="nit" placeholder="Ej: 999999-1">
+      </mat-form-field>
+      <span class="field-hint">El NIT no puede modificarse.</span>
+    </div>
 
-  <div class="form-row">
-    <mat-form-field appearance="outline">
-      <mat-label>Teléfono</mat-label>
-      <input matInput formControlName="telefono" placeholder="Ej: 71234567">
-    </mat-form-field>
+    <div class="form-field-group">
+      <label class="field-label">Teléfono</label>
+      <mat-form-field class="sm-capsule-field" appearance="outline" subscriptSizing="dynamic">
+        <input matInput formControlName="telefono" placeholder="Ej: 33445566">
+      </mat-form-field>
+    </div>
 
-    <mat-form-field appearance="outline">
-      <mat-label>Email</mat-label>
-      <input matInput type="email" formControlName="email" placeholder="taller@ejemplo.com">
-    </mat-form-field>
+    <!-- Email -->
+    <div class="form-field-group full-width">
+      <label class="field-label">Email</label>
+      <mat-form-field class="sm-capsule-field" appearance="outline" subscriptSizing="dynamic">
+        <input matInput type="email" formControlName="email" placeholder="contacto@elrayo.com">
+      </mat-form-field>
+    </div>
+
+    <!-- Dirección -->
+    <div class="form-field-group full-width">
+      <label class="field-label">Dirección</label>
+      <mat-form-field class="sm-capsule-field" appearance="outline" subscriptSizing="dynamic">
+        <input matInput formControlName="direccion" placeholder="Ej: 2° anillo / Avenida Bush / calle Manuel Guemes">
+      </mat-form-field>
+    </div>
   </div>
 
-  <mat-form-field appearance="outline" class="full-width">
-    <mat-label>Dirección</mat-label>
-    <input matInput formControlName="direccion" placeholder="Ej: Av. Principal #123">
-  </mat-form-field>
-
-  <div class="map-container">
-    <p class="map-hint">Haz clic en el mapa para marcar la ubicación del taller:</p>
-    <div #mapContainer class="leaflet-map" ngSkipHydration></div>
+  <!-- Separador Ubicación en el Mapa -->
+  <div class="map-section-header">
+    <span class="line"></span>
+    <span class="header-title">UBICACIÓN EN EL MAPA</span>
+    <span class="line"></span>
   </div>
 
-  <div class="form-row">
-    <mat-form-field appearance="outline">
-      <mat-label>Latitud</mat-label>
-      <input matInput type="number" formControlName="latitud" readonly>
-    </mat-form-field>
-
-    <mat-form-field appearance="outline">
-      <mat-label>Longitud</mat-label>
-      <input matInput type="number" formControlName="longitud" readonly>
-    </mat-form-field>
+  <div class="map-section-label">
+    <lucide-icon [img]="mapPinIcon" [size]="16" class="pin-icon"></lucide-icon>
+    <span>Haz clic en el mapa para marcar la ubicación del taller</span>
   </div>
 
-  <div class="form-actions">
-    <button mat-flat-button color="primary" type="submit" [disabled]="workshopForm.invalid">
-      Registrar Taller
+  <!-- Google Map -->
+  <div class="google-map-wrapper">
+    @if (apiLoaded()) {
+      <google-map 
+        height="350px" 
+        width="100%" 
+        [center]="mapCenter()" 
+        [zoom]="14"
+        (mapClick)="onMapClick($event)">
+        <map-marker 
+          [position]="markerPosition()"
+          [options]="markerOptions"
+          (mapDragend)="onMarkerDragEnd($event)">
+        </map-marker>
+      </google-map>
+    } @else {
+      <div class="map-placeholder-loading">
+        Cargando mapa interactivo...
+      </div>
+    }
+  </div>
+
+  <!-- Coordenadas -->
+  <div class="form-grid-layout coordinates-row">
+    <div class="form-field-group">
+      <label class="field-label">Latitud *</label>
+      <mat-form-field class="sm-capsule-field" appearance="outline" subscriptSizing="dynamic">
+        <input matInput type="number" formControlName="latitud" readonly>
+      </mat-form-field>
+    </div>
+
+    <div class="form-field-group">
+      <label class="field-label">Longitud *</label>
+      <mat-form-field class="sm-capsule-field" appearance="outline" subscriptSizing="dynamic">
+        <input matInput type="number" formControlName="longitud" readonly>
+      </mat-form-field>
+    </div>
+  </div>
+
+  <!-- Acciones del Formulario -->
+  <div class="form-actions-bar">
+    <button mat-stroked-button type="button" class="btn-cancel" (click)="onCancel()">
+      Cancelar
+    </button>
+    <button mat-flat-button class="btn-save" type="submit" [disabled]="workshopForm.invalid">
+      <lucide-icon [img]="checkIcon" [size]="16"></lucide-icon>
+      Guardar cambios
     </button>
   </div>
 </form>

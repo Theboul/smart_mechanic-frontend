@@ -1,6 +1,6 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { IncidentDetailResponse } from '@core/models/emergencies.model';
+import { IncidentResponse } from '@core/models/workshops.model';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -12,7 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
   styleUrls: ['./incident-details-card.scss']
 })
 export class IncidentDetailsCard {
-  @Input() incident!: IncidentDetailResponse;
+  @Input() incident!: IncidentResponse;
 
   getPriorityColor(priority: string): string {
     switch (priority.toUpperCase()) {

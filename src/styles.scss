@@ -73,3 +73,57 @@ body {
   color: var(--sm-color-text-muted) !important;
   font-size: 0.6rem !important;
 }
+
+// Clase de Utilidad Global para Campos de Entrada en Cápsula (Style Reuse)
+.sm-capsule-field {
+  width: 100% !important;
+  min-width: 0 !important;
+  display: block;
+
+  .mat-mdc-text-field-wrapper {
+    border-radius: 28px !important;
+    background: rgba(255, 255, 255, 0.02) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
+    height: 44px !important;
+    display: flex;
+    align-items: center;
+  }
+  
+  .mat-mdc-text-field-wrapper:hover {
+    border-color: rgba(255, 255, 255, 0.15) !important;
+  }
+  
+  .mat-mdc-form-field-flex {
+    padding-left: 1.25rem !important;
+    padding-right: 1.25rem !important;
+    align-items: center !important;
+  }
+  
+  .mat-mdc-input-element, .mat-mdc-select-value {
+    color: var(--sm-color-text-main) !important;
+    caret-color: var(--sm-color-sapphire-500) !important;
+    font-size: 0.85rem !important;
+  }
+  
+  .mdc-notched-outline {
+    display: none !important;
+  }
+  
+  .mat-mdc-form-field-icon-prefix, .mat-mdc-form-field-icon-suffix, .mat-mdc-select-arrow-wrapper {
+    color: var(--sm-color-text-muted) !important;
+    display: flex;
+    align-items: center;
+  }
+  
+  &.mat-focused {
+    .mat-mdc-text-field-wrapper {
+      border-color: var(--sm-color-sapphire-500) !important;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+    }
+    .mat-mdc-form-field-icon-prefix, .mat-mdc-form-field-icon-suffix, .mat-mdc-select-arrow-wrapper {
+      color: var(--sm-color-sapphire-500) !important;
+    }
+  }
+}
+

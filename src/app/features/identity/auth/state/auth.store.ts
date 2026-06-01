@@ -48,6 +48,11 @@ export const AuthStore = signalStore(
       storageService.setItem('access_token', token);
       storageService.setItem('user_data', JSON.stringify(user));
     },
+
+    updateUser(user: User) {
+      patchState(store, { user });
+      storageService.setItem('user_data', JSON.stringify(user));
+    },
     
     logout() {
       patchState(store, initialState);

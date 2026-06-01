@@ -6,7 +6,7 @@
         {{ incident.prioridad_incidente }}
       </mat-chip>
       <mat-chip>
-        {{ incident.estado_incidente }}
+        {{ incident.estado_incidente.replace('_', ' ') }}
       </mat-chip>
     </mat-chip-set>
   </div>
@@ -14,24 +14,68 @@
   <div class="details-grid">
     <div class="detail-item">
       <span class="label">ID de Emergencia:</span>
-      <span class="value">{{ incident.id_incidente }}</span>
+      <span class="value mono-id">{{ incident.id_incidente }}</span>
     </div>
+    
     <div class="detail-item">
-      <span class="label">Vehículo:</span>
-      <span class="value">{{ incident.id_vehiculo }}</span>
-    </div>
-    <div class="detail-item">
-      <span class="label">Teléfono de Contacto:</span>
-      <span class="value">{{ incident.telefono || 'No disponible' }}</span>
-    </div>
-    <div class="detail-item">
-      <span class="label">Fecha:</span>
+      <span class="label">Fecha y Hora:</span>
       <span class="value">{{ incident.fecha_reporte | date:'medium' }}</span>
+    </div>
+
+    <div class="detail-item">
+      <span class="label">Quién solicitó (Cliente):</span>
+      <span class="value">{{ incident.client_name || 'No especificado' }}</span>
+    </div>
+
+    <div class="detail-item">
+      <span class="label">Teléfono del Cliente:</span>
+      <span class="value">{{ incident.client_phone || incident.telefono || 'No disponible' }}</span>
+    </div>
+
+    <div class="detail-item">
+      <span class="label">Vehículo Involucrado:</span>
+      <span class="value" *ngIf="incident.vehicle_brand; else fallbackVeh">
+        {{ incident.vehicle_brand }} {{ incident.vehicle_model }} ({{ incident.vehicle_year }})
+      </span>
+      <ng-template #fallbackVeh>
+        <span class="value mono-id">{{ incident.id_vehiculo }}</span>
+      </ng-template>
+    </div>
+
+    <div class="detail-item">
+      <span class="label">Matrícula y Color:</span>
+      <span class="value" *ngIf="incident.vehicle_plate; else noPlate">
+        Placa: {{ incident.vehicle_plate }} | Color: {{ incident.vehicle_color || 'N/A' }}
+      </span>
+      <ng-template #noPlate>
+        <span class="value">No disponible</span>
+      </ng-template>
+    </div>
+
+    <div class="detail-item">
+      <span class="label">Taller Responsable:</span>
+      <span class="value">{{ incident.workshop_name || 'Pendiente de asignación' }}</span>
+    </div>
+
+    <div class="detail-item">
+      <span class="label">Técnico Encargado:</span>
+      <span class="value" *ngIf="incident.technician_name; else noTech">
+        {{ incident.technician_name }}
+        <span class="value-sub" *ngIf="incident.technician_phone">({{ incident.technician_phone }})</span>
+      </span>
+      <ng-template #noTech>
+        <span class="value">Buscando técnico...</span>
+      </ng-template>
+    </div>
+
+    <div class="detail-item full-width">
+      <span class="label">Coordenadas de Ubicación:</span>
+      <span class="value">{{ incident.latitud }}, {{ incident.longitud }}</span>
     </div>
   </div>
 
   <div class="description-section">
     <h4>Descripción del Usuario</h4>
-    <p>{{ incident.descripcion || 'Sin descripción adicional.' }}</p>
+    <p>{{ incident.descripcion || 'S.O.S generado desde la app móvil sin comentarios adicionales.' }}</p>
   </div>
 </div>

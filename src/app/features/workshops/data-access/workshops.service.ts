@@ -9,7 +9,10 @@ import {
   StatusUpdate, 
   TecnicoCreate, 
   TecnicoResponse, 
-  IncidentAccept 
+  IncidentAccept,
+  SucursalCreate,
+  SucursalResponse,
+  AsignarAdminSucursal 
 } from '@core/models/workshops.model';
 
 @Injectable({
@@ -94,5 +97,35 @@ export class WorkshopsService {
 
   rejectIncident(incidentId: string): Observable<IncidentResponse> {
     return this.http.post<IncidentResponse>(`${this.API_URL}/me/assignments/${incidentId}/reject`, {});
+  }
+
+  // --- Gestión de Sucursales (PWA Multi-Tenant) ---
+
+  getBranches(): Observable<SucursalResponse[]> {
+    return this.http.get<SucursalResponse[]>(`${this.API_URL}/me/branches`);
+  }
+
+  createBranch(data: SucursalCreate): Observable<SucursalResponse> {
+    return this.http.post<SucursalResponse>(`${this.API_URL}/me/branches`, data);
+  }
+
+  updateBranch(id: string, data: SucursalCreate): Observable<SucursalResponse> {
+    return this.http.put<SucursalResponse>(`${this.API_URL}/me/branches/${id}`, data);
+  }
+
+  toggleBranchStatus(id: string): Observable<SucursalResponse> {
+    return this.http.delete<SucursalResponse>(`${this.API_URL}/me/branches/${id}`);
+  }
+
+  assignBranchAdmin(data: AsignarAdminSucursal): Observable<any> {
+    return this.http.post<any>(`${this.API_URL}/me/branches/assign-admin`, data);
+  }
+
+  getMyBranch(): Observable<SucursalResponse> {
+    return this.http.get<SucursalResponse>(`${this.API_URL}/me/my-branch`);
+  }
+
+  updateMyBranchLocal(data: SucursalCreate): Observable<SucursalResponse> {
+    return this.http.put<SucursalResponse>(`${this.API_URL}/me/my-branch`, data);
   }
 }

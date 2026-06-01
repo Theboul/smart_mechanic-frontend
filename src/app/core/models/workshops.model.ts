@@ -30,6 +30,10 @@ export interface IncidentResponse {
   id_incidente: string;
   id_vehiculo: string;
   id_taller: string | null;
+  id_tecnico?: string | null;
+  workshop_name?: string | null;
+  technician_name?: string | null;
+  technician_phone?: string | null;
   descripcion: string | null;
   telefono: string | null;
   latitud: number;
@@ -41,6 +45,15 @@ export interface IncidentResponse {
   analisis_consolidado: string | null;
   fecha_reporte?: string;
   evidencias: EvidenceResponse[];
+  
+  // Nuevos campos
+  client_name?: string | null;
+  client_phone?: string | null;
+  vehicle_brand?: string | null;
+  vehicle_model?: string | null;
+  vehicle_plate?: string | null;
+  vehicle_color?: string | null;
+  vehicle_year?: number | null;
 }
 
 export interface IncidentDetailResponse {
@@ -72,8 +85,34 @@ export interface TecnicoResponse {
   nombre: string;
   telefono: string;
   estado: boolean;
+  temp_password?: string;
 }
 
 export interface IncidentAccept {
   id_tecnico: string;
+}
+
+export interface SucursalCreate {
+  nombre: string;
+  telefono?: string;
+  direccion: string;
+  latitud: number;
+  longitud: number;
+}
+
+export interface SucursalResponse {
+  id_sucursal: string;
+  id_taller: string;
+  nombre: string;
+  telefono?: string;
+  direccion: string;
+  latitud?: number;
+  longitud?: number;
+  estado: boolean;
+  fecha_creacion: string;
+}
+
+export interface AsignarAdminSucursal {
+  id_usuario: string;
+  id_sucursal: string;
 }

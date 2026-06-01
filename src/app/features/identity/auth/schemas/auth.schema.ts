@@ -11,6 +11,9 @@ export const userSchema = z.object({
   correo: z.string().email(),
   rol_nombre: z.string(),
   estado: z.boolean(),
+  rol_contexto: z.string().optional().nullable(),
+  id_taller: z.string().uuid().optional().nullable(),
+  id_sucursal: z.string().uuid().optional().nullable(),
 });
 
 export const authResponseSchema = z.object({

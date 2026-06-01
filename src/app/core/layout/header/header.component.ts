@@ -1,9 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, Input, Output, EventEmitter } from '@angular/core';
 import { Router } from '@angular/router';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthStore } from '@features/identity/auth/state/auth.store';
-import { LogOut, LucideAngularModule } from 'lucide-angular';
+import { LogOut, Menu, LucideAngularModule } from 'lucide-angular';
 
 @Component({
   selector: 'app-header',
@@ -15,6 +15,13 @@ import { LogOut, LucideAngularModule } from 'lucide-angular';
   ],
   template: `
     <mat-toolbar class="app-header">
+      <!-- Botón hamburguesa móvil -->
+      @if (showMenuButton) {
+        <button mat-icon-button (click)="menuToggled.emit()" class="menu-toggle-btn">
+          <lucide-icon [img]="menuIcon" [size]="20" aria-hidden="true"></lucide-icon>
+        </button>
+      }
+
       <!-- Título / Branding -->
       <div class="header-brand">
         <span class="brand-logo">SM</span>
@@ -139,11 +146,22 @@ import { LogOut, LucideAngularModule } from 'lucide-angular';
       color: var(--sm-color-white);
     }
 
+    .menu-toggle-btn {
+      color: var(--sm-color-text-main);
+      margin-right: 0.5rem;
+      border: none;
+      background: transparent;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
     @media (max-width: 600px) {
       .brand-subtitle, .user-name {
         display: none;
       }
-
+ 
       .app-header {
         padding-inline: 0.6rem;
       }
@@ -153,7 +171,12 @@ import { LogOut, LucideAngularModule } from 'lucide-angular';
 export class HeaderComponent {
   public authStore = inject(AuthStore);
   private router = inject(Router);
+  
+  @Input() showMenuButton = false;
+  @Output() menuToggled = new EventEmitter<void>();
+
   protected readonly logoutIcon = LogOut;
+  protected readonly menuIcon = Menu;
 
   logout() {
     this.authStore.logout();

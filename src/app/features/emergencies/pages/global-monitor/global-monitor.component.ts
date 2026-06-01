@@ -120,6 +120,7 @@ import { PushNotificationService } from '@core/services/push-notification.servic
             <mat-label>Prioridad</mat-label>
             <mat-select [ngModel]="filterPrioridad()" (ngModelChange)="filterPrioridad.set($event); onFilterChange()">
               <mat-option value="">Todas</mat-option>
+              <mat-option value="CRITICA">Crítica</mat-option>
               <mat-option value="ALTA">Alta</mat-option>
               <mat-option value="MEDIA">Media</mat-option>
               <mat-option value="BAJA">Baja</mat-option>
@@ -287,6 +288,7 @@ import { PushNotificationService } from '@core/services/push-notification.servic
     .truncate { max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0; font-size: .82rem; color: var(--sm-color-text-soft); }
 
     .priority-badge { padding: .2rem .55rem; border-radius: 4px; font-size: .68rem; font-weight: 800; letter-spacing: .03em;
+      &[data-p="CRITICA"] { background: rgba(231,76,60,.25);  color: #ef4444; border: 1px solid rgba(231,76,60,.4); }
       &[data-p="ALTA"]  { background: rgba(231,76,60,.15);  color: #e74c3c; }
       &[data-p="MEDIA"] { background: rgba(241,196,15,.15); color: #f1c40f; }
       &[data-p="BAJA"]  { background: rgba(46,204,113,.15); color: #2ecc71; }
@@ -371,7 +373,10 @@ export class GlobalMonitorComponent {
   allData          = computed(() => (this.incidentsQuery.data()) ?? []);
   totalCount       = computed(() => this.allData().length);
   activeCount      = computed(() => this.allData().filter(i => ['EN_CAMINO','EN_PROGRESO'].includes(i.estado_incidente)).length);
-  highPriorityCount = computed(() => this.allData().filter(i => i.prioridad_incidente === 'ALTA').length);
+  highPriorityCount = computed(() => this.allData().filter(i => {
+    const p = (i.prioridad_incidente || '').trim().toUpperCase();
+    return p === 'ALTA' || p === 'CRITICA';
+  }).length);
   completedCount   = computed(() => this.allData().filter(i => i.estado_incidente === 'COMPLETADO').length);
 
   // ── Filtrado reactivo ─────────────────────────────────────────────────────
@@ -383,7 +388,10 @@ export class GlobalMonitorComponent {
       data = data.filter((i) => i.id_incidente?.toLowerCase().includes(q));
     }
     if (this.filterEstado())    data = data.filter((i) => i.estado_incidente === this.filterEstado());
-    if (this.filterPrioridad()) data = data.filter((i) => i.prioridad_incidente === this.filterPrioridad());
+    if (this.filterPrioridad()) {
+      const p = this.filterPrioridad().trim().toUpperCase();
+      data = data.filter((i) => (i.prioridad_incidente || '').trim().toUpperCase() === p);
+    }
     if (this.filterTaller() === 'asignado')    data = data.filter((i) =>  i.id_taller);
     if (this.filterTaller() === 'sin_asignar') data = data.filter((i) => !i.id_taller);
     if (this.filterFechaInicio()) {

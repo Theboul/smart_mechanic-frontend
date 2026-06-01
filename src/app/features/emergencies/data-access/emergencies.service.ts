@@ -11,11 +11,14 @@ export class EmergenciesService {
   private http = inject(HttpClient);
   private readonly API_URL = `${environment.apiUrl}/emergencies`;
 
-  /**
-   * Obtiene todos los incidentes globales (Solo SuperAdmin)
-   */
-  getAllIncidents(): Observable<IncidentResponse[]> {
-    return this.http.get<IncidentResponse[]>(`${this.API_URL}/`);
+  getAllIncidents(page?: number, size?: number): Observable<IncidentResponse[]> {
+    let url = `${this.API_URL}/`;
+    let params: any = {};
+    if (page !== undefined && page !== null && size !== undefined && size !== null) {
+      params.page = page.toString();
+      params.size = size.toString();
+    }
+    return this.http.get<IncidentResponse[]>(url, { params });
   }
 
   /**

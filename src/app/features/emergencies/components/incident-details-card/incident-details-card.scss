@@ -40,6 +40,23 @@
     color: var(--sm-color-text-main);
     font-weight: 500;
   }
+
+  .mono-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    color: var(--sm-color-sapphire-400);
+    word-break: break-all;
+  }
+
+  .value-sub {
+    font-size: 0.78rem;
+    color: var(--sm-color-text-muted, #7f8c8d);
+    margin-left: 0.25rem;
+  }
+}
+
+.full-width {
+  grid-column: 1 / -1;
 }
 
 .description-section {

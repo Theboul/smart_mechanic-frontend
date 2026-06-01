@@ -322,8 +322,12 @@ export class ManageTeamComponent {
   // ── Mutations ──────────────────────────────────────────────────────────────
   createMutation = injectMutation(() => ({
     mutationFn: (data: TecnicoCreate) => lastValueFrom(this.workshopsService.createTechnician(data)),
-    onSuccess: () => {
-      this.snackBar.open('✅ Técnico registrado correctamente', 'Cerrar', { duration: 3000 });
+    onSuccess: (newTech: TecnicoResponse) => {
+      if (newTech.temp_password) {
+        this.snackBar.open(`✅ Técnico registrado. Cuenta temporal: ${newTech.temp_password}`, 'Entendido', { duration: 15000 });
+      } else {
+        this.snackBar.open('✅ Técnico registrado correctamente', 'Cerrar', { duration: 3000 });
+      }
       this.queryClient.invalidateQueries({ queryKey: ['technicians'] });
       this.closeForm();
     },

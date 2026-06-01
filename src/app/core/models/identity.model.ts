@@ -10,6 +10,10 @@ export interface UserResponse {
   correo: string;
   rol_nombre: string;
   estado: boolean;
+  rol_contexto?: string;
+  id_taller?: string;
+  id_sucursal?: string;
+  placas?: string[];
 }
 
 export interface TokenSchema {

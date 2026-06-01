@@ -36,4 +36,11 @@ export class IdentityService {
   createUser(userData: any): Observable<UserResponse> {
     return this.http.post<UserResponse>(`${this.API_URL}/users/`, userData);
   }
+
+  /**
+   * Obtiene el perfil del usuario autenticado actual
+   */
+  getMyProfile(): Observable<UserResponse> {
+    return this.http.get<UserResponse>(`${this.API_URL}/users/me`);
+  }
 }
