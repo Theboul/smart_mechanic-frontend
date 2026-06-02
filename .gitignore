@@ -49,3 +49,5 @@ Thumbs.db
 environment.local.ts
 firebase-key.json
 *-firebase-adminsdk-*.json
+src/assets/env.js
+src/firebase-messaging-sw.js
