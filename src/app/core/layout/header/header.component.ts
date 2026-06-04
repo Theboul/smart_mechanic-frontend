@@ -1,16 +1,26 @@
-import { Component, inject, Input, Output, EventEmitter } from '@angular/core';
+import { Component, inject, Input, Output, EventEmitter, OnInit, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatButtonModule } from '@angular/material/button';
+import { MatSelectModule } from '@angular/material/select';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { AuthStore } from '@features/identity/auth/state/auth.store';
+import { WorkshopsService } from '@features/workshops/data-access/workshops.service';
+import { StorageService } from '@core/services/storage.service';
 import { LogOut, Menu, LucideAngularModule } from 'lucide-angular';
 
 @Component({
   selector: 'app-header',
   standalone: true,
   imports: [
+    CommonModule,
+    FormsModule,
     MatToolbarModule,
     MatButtonModule,
+    MatSelectModule,
+    MatFormFieldModule,
     LucideAngularModule,
   ],
   template: `
@@ -35,6 +45,18 @@ import { LogOut, Menu, LucideAngularModule } from 'lucide-angular';
 
       <!-- Acciones del lado derecho -->
       <div class="header-actions">
+        <!-- Selector de Contexto (Branch Switcher) para el Owner -->
+        @if (isOwner()) {
+          <mat-form-field appearance="outline" class="branch-select-field" subscriptSizing="dynamic">
+            <mat-select [value]="selectedBranch()" (selectionChange)="onBranchChange($event.value)" placeholder="Todas las sucursales">
+              <mat-option value="">🌐 Todas las sucursales</mat-option>
+              @for (b of branches(); track b.id_sucursal) {
+                <mat-option [value]="b.id_sucursal">🏢 {{ b.nombre }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+
         <!-- Info del usuario logueado -->
         @if (authStore.isAuthenticated()) {
           <span class="user-name">{{ authStore.user()?.nombre }}</span>
@@ -157,6 +179,36 @@ import { LogOut, Menu, LucideAngularModule } from 'lucide-angular';
       cursor: pointer;
     }
 
+    .branch-select-field {
+      width: 220px;
+      font-size: 0.8rem;
+      
+      ::ng-deep .mat-mdc-form-field-infix {
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+        min-height: 36px !important;
+      }
+      ::ng-deep .mat-mdc-text-field-wrapper {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 8px !important;
+        height: 36px !important;
+      }
+      ::ng-deep .mat-mdc-select-value {
+        color: var(--sm-color-text-main) !important;
+        font-weight: 600;
+      }
+      ::ng-deep .mat-mdc-select-arrow {
+        color: var(--sm-color-text-muted) !important;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .branch-select-field {
+        width: 150px;
+      }
+    }
+
     @media (max-width: 600px) {
       .brand-subtitle, .user-name {
         display: none;
@@ -168,9 +220,11 @@ import { LogOut, Menu, LucideAngularModule } from 'lucide-angular';
     }
   `]
 })
-export class HeaderComponent {
+export class HeaderComponent implements OnInit {
   public authStore = inject(AuthStore);
   private router = inject(Router);
+  private workshopsService = inject(WorkshopsService);
+  private storageService = inject(StorageService);
   
   @Input() showMenuButton = false;
   @Output() menuToggled = new EventEmitter<void>();
@@ -178,7 +232,40 @@ export class HeaderComponent {
   protected readonly logoutIcon = LogOut;
   protected readonly menuIcon = Menu;
 
+  isOwner = computed(() => {
+    const user = this.authStore.user();
+    return (user?.rol_nombre || '').toLowerCase().trim() === 'admin_taller' && user?.rol_contexto === 'owner';
+  });
+
+  branches = signal<any[]>([]);
+  selectedBranch = signal<string>('');
+
+  ngOnInit() {
+    if (this.isOwner()) {
+      this.workshopsService.getBranches().subscribe({
+        next: (res) => {
+          this.branches.set(res || []);
+        },
+        error: (err) => {
+          console.error('Error fetching branches for header switcher:', err);
+        }
+      });
+      this.selectedBranch.set(this.storageService.getItem('selected_branch') || '');
+    }
+  }
+
+  onBranchChange(value: string) {
+    if (value) {
+      this.storageService.setItem('selected_branch', value);
+    } else {
+      this.storageService.removeItem('selected_branch');
+    }
+    this.selectedBranch.set(value);
+    window.location.reload();
+  }
+
   logout() {
+    this.storageService.removeItem('selected_branch');
     this.authStore.logout();
     this.router.navigate(['/identity/auth']);
   }

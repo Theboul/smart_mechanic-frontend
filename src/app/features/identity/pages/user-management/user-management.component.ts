@@ -18,9 +18,10 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { LucideAngularModule, User, UserPlus, Filter, Search, ShieldCheck, Mail, Briefcase, RefreshCw, Phone, Users, Wrench } from 'lucide-angular';
+import { LucideAngularModule, User, UserPlus, Filter, Search, ShieldCheck, Mail, Briefcase, RefreshCw, Phone, Users, Wrench, MapPin } from 'lucide-angular';
 import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent, StatCardComponent, SearchInputComponent, SelectComponent, SelectOption } from '@shared/ui';
 import { UserFormDialogComponent } from '../../components/user-form-dialog/user-form-dialog.component';
+import { StorageService } from '@core/services/storage.service';
 
 @Component({
   selector: 'app-user-management',
@@ -91,9 +92,7 @@ import { UserFormDialogComponent } from '../../components/user-form-dialog/user-
           description="Admin taller" 
           [icon]="shieldCheckIcon">
         </app-stat-card>
-      </div>
- 
-      <!-- Barra de Filtros Premium (Detalle de Imagen 2) -->
+      </div>      <!-- Barra de Filtros Premium (Detalle de Imagen 2) -->
       <div class="filters-container sm-glass-card">
         <div class="filter-group">
           <app-search-input
@@ -102,6 +101,17 @@ import { UserFormDialogComponent } from '../../components/user-form-dialog/user-
             (valueChange)="onFilterChange()"
             placeholder="Buscar por nombre, correo, teléfono o placa...">
           </app-search-input>
+
+          @if (isOwner()) {
+            <mat-form-field appearance="outline" class="branch-select-field" subscriptSizing="dynamic">
+              <mat-select [value]="usersBranchFilter()" (selectionChange)="onBranchChange($event.value)" placeholder="Todas las sucursales">
+                <mat-option value="">🌐 Todas las sucursales</mat-option>
+                @for (b of branches(); track b.id_sucursal) {
+                  <mat-option [value]="b.id_sucursal">🏢 {{ b.nombre }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
  
           <app-select
             class="sm-select"
@@ -136,6 +146,17 @@ import { UserFormDialogComponent } from '../../components/user-form-dialog/user-
           <div class="table-info">
             <lucide-icon [img]="shieldCheckIcon" [size]="16"></lucide-icon>
             <span>Usuarios registrados</span>
+            @if (isOwner() && !usersBranchFilter()) {
+              <span class="global-badge">
+                <lucide-icon [img]="mapPinIcon" [size]="12"></lucide-icon>
+                Todas las sucursales
+              </span>
+            } @else if (isOwner() && usersBranchFilter()) {
+              <span class="branch-badge">
+                <lucide-icon [img]="mapPinIcon" [size]="12"></lucide-icon>
+                {{ getBranchName(usersBranchFilter()) }}
+              </span>
+            }
             <span class="count-badge">{{ filteredUsers().length }}</span>
           </div>
         </div>
@@ -172,6 +193,17 @@ import { UserFormDialogComponent } from '../../components/user-form-dialog/user-
                       <lucide-icon [img]="mailIcon" [size]="12"></lucide-icon>
                       <span>{{ user.correo }}</span>
                     </div>
+                  </div>
+                </td>
+              </ng-container>
+
+              <!-- Columna Sucursal -->
+              <ng-container matColumnDef="sucursal">
+                <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+                <td mat-cell *matCellDef="let user">
+                  <div class="sucursal-chip">
+                    <lucide-icon [img]="mapPinIcon" [size]="12"></lucide-icon>
+                    <span>{{ getBranchName(user.id_sucursal) }}</span>
                   </div>
                 </td>
               </ng-container>
@@ -220,11 +252,11 @@ import { UserFormDialogComponent } from '../../components/user-form-dialog/user-
                 </td>
               </ng-container>
   
-              <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-              <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
+              <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns();" class="table-row"></tr>
             </table>
           </div>
-
+ 
           <!-- Vista Móvil responsiva (Cards) -->
           <div class="mobile-cards-grid">
             @for (user of pagedUsers(); track user.id_usuario) {
@@ -257,6 +289,12 @@ import { UserFormDialogComponent } from '../../components/user-form-dialog/user-
                     <div class="info-item">
                       <lucide-icon [img]="phoneIcon" [size]="12"></lucide-icon>
                       <span>{{ user.telefono }}</span>
+                    </div>
+                  }
+                  @if (isOwner() || isSuperAdmin()) {
+                    <div class="info-item">
+                      <lucide-icon [img]="mapPinIcon" [size]="12"></lucide-icon>
+                      <span>{{ getBranchName(user.id_sucursal) }}</span>
                     </div>
                   }
                   <div class="info-item text-muted">
@@ -468,6 +506,76 @@ import { UserFormDialogComponent } from '../../components/user-form-dialog/user-
  
     .premium-paginator { background: transparent; color: var(--sm-color-text-soft); }
     .mobile-cards-grid { display: none; }
+
+    .branch-select-field {
+      width: 240px;
+      font-size: 0.85rem;
+      
+      ::ng-deep .mat-mdc-form-field-infix {
+        padding-top: 6px !important;
+        padding-bottom: 6px !important;
+        min-height: 38px !important;
+      }
+      ::ng-deep .mat-mdc-text-field-wrapper {
+        background: rgba(30, 64, 175, 0.15) !important;
+        border: 1px solid rgba(59, 130, 246, 0.4) !important;
+        border-radius: 10px !important;
+        height: 38px !important;
+        transition: all 0.3s ease;
+      }
+      ::ng-deep .mat-mdc-text-field-wrapper:hover {
+        background: rgba(30, 64, 175, 0.25) !important;
+        border-color: rgba(59, 130, 246, 0.7) !important;
+      }
+      ::ng-deep .mat-mdc-select-value {
+        color: #93c5fd !important;
+        font-weight: 700;
+      }
+      ::ng-deep .mat-mdc-select-arrow {
+        color: #60a5fa !important;
+      }
+    }
+
+    .global-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      color: #60a5fa;
+      padding: 0.15rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-left: 0.5rem;
+    }
+
+    .branch-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid rgba(139, 92, 246, 0.25);
+      color: #a78bfa;
+      padding: 0.15rem 0.6rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-left: 0.5rem;
+    }
+
+    .sucursal-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 8px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      background: rgba(59, 130, 246, 0.1);
+      color: #60a5fa;
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
  
     @media (max-width: 768px) {
       .page-container { padding: 1rem; }
@@ -477,6 +585,7 @@ import { UserFormDialogComponent } from '../../components/user-form-dialog/user-
         .filter-group { flex-direction: column; align-items: stretch; gap: 0.75rem; }
         .search-field-mat { max-width: 100%; }
         .sm-select { width: 100%; }
+        .branch-select-field { width: 100%; }
       }
       .table-container { display: none; }
       .mobile-cards-grid {
@@ -518,6 +627,7 @@ export class UserManagementComponent {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private queryClient = injectQueryClient();
+  private storageService = inject(StorageService);
  
   // Iconos
   protected readonly userPlusIcon = UserPlus;
@@ -531,7 +641,8 @@ export class UserManagementComponent {
   protected readonly phoneIcon = Phone;
   protected readonly usersIcon = Users;
   protected readonly wrenchIcon = Wrench;
-
+  protected readonly mapPinIcon = MapPin;
+ 
   // Estado de Filtros (Señales reactivas)
   searchQuery = signal('');
   filterRol = signal('');
@@ -540,21 +651,47 @@ export class UserManagementComponent {
   // Paginación
   pageSize = 10;
   pageIndex = 0;
-
+ 
   isSuperAdmin = computed(() => this.authStore.user()?.rol_nombre === 'superadmin');
+  isOwner = computed(() => {
+    const user = this.authStore.user();
+    return (user?.rol_nombre || '').toLowerCase().trim() === 'admin_taller' && user?.rol_contexto === 'owner';
+  });
+
+  usersBranchFilter = signal<string>(
+    this.storageService.getItem('users_branch_filter') !== null
+      ? this.storageService.getItem('users_branch_filter')!
+      : (this.storageService.getItem('selected_branch') || '')
+  );
+
+
+  branchesQuery = injectQuery(() => ({
+    queryKey: ['branches'],
+    queryFn: () => lastValueFrom(this.workshopsService.getBranches()),
+    enabled: this.isOwner()
+  }));
+
+  branches = computed(() => this.branchesQuery.data() || []);
   
   totalUsersCount = computed(() => this.usersQuery.data()?.length || 0);
   activeTechniciansCount = computed(() => this.usersQuery.data()?.filter(u => u.rol_nombre === 'tecnico' && u.estado).length || 0);
   clientsCount = computed(() => this.usersQuery.data()?.filter(u => u.rol_nombre === 'cliente').length || 0);
   adminsCount = computed(() => this.usersQuery.data()?.filter(u => u.rol_nombre === 'admin_taller').length || 0);
-
+ 
   pageSubtitle = computed(() => 
     this.isSuperAdmin() 
       ? 'Administra los usuarios, roles y accesos globales de la plataforma.' 
       : 'Gestiona el personal y técnicos asignados a tu taller.'
   );
-
-  displayedColumns: string[] = ['nombre', 'contacto', 'rol', 'estado', 'acciones'];
+ 
+  displayedColumns = computed(() => {
+    const cols = ['nombre', 'contacto'];
+    if (this.isOwner() || this.isSuperAdmin()) {
+      cols.push('sucursal');
+    }
+    cols.push('rol', 'estado', 'acciones');
+    return cols;
+  });
 
   roleOptions: SelectOption[] = [
     { value: 'superadmin', label: 'SuperAdmin' },
@@ -564,8 +701,13 @@ export class UserManagementComponent {
   ];
 
   usersQuery = injectQuery(() => ({
-    queryKey: ['users', this.selectedWorkshopId()],
-    queryFn: () => lastValueFrom(this.identityService.getUsers(this.selectedWorkshopId() ?? undefined))
+    queryKey: ['users', this.selectedWorkshopId(), this.usersBranchFilter()],
+    queryFn: () => lastValueFrom(
+      this.identityService.getUsers(
+        this.selectedWorkshopId() ?? undefined,
+        this.usersBranchFilter() || 'all'
+      )
+    )
   }));
 
   workshopsQuery = injectQuery(() => ({
@@ -652,10 +794,28 @@ export class UserManagementComponent {
     this.pageSize = event.pageSize;
   }
 
+  onBranchChange(value: string) {
+    this.storageService.setItem('users_branch_filter', value);
+    this.usersBranchFilter.set(value);
+    this.pageIndex = 0;
+  }
+
+  getBranchName(id_sucursal: string | null | undefined): string {
+    if (!id_sucursal) {
+      return 'Global';
+    }
+    const branch = this.branches().find(b => b.id_sucursal === id_sucursal);
+    return branch ? branch.nombre : 'Casa Matriz';
+  }
+
   clearFilters() {
     this.searchQuery.set('');
     this.filterRol.set('');
     this.selectedWorkshopId.set(null);
+    if (this.isOwner()) {
+      this.storageService.setItem('users_branch_filter', '');
+      this.usersBranchFilter.set('');
+    }
     this.pageIndex = 0;
   }
 

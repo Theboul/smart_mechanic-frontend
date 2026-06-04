@@ -15,10 +15,13 @@ export class IdentityService {
    * Obtiene la lista de usuarios con filtros opcionales.
    * @param tallerId ID del taller para filtrar (opcional para SuperAdmin)
    */
-  getUsers(tallerId?: string): Observable<UserResponse[]> {
+  getUsers(tallerId?: string, idSucursal?: string): Observable<UserResponse[]> {
     let params = new HttpParams();
     if (tallerId) {
       params = params.set('id_taller', tallerId);
+    }
+    if (idSucursal) {
+      params = params.set('id_sucursal', idSucursal);
     }
     return this.http.get<UserResponse[]>(`${this.API_URL}/users`, { params });
   }

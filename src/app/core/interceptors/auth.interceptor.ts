@@ -17,10 +17,15 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const isApiRequest = req.url.includes(environment.apiUrl) || req.url.startsWith('/api');
 
   if (token && isApiRequest) {
+    const selectedBranch = storageService.getItem('selected_branch');
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+    };
+    if (selectedBranch) {
+      headers['X-Selected-Branch'] = selectedBranch;
+    }
     req = req.clone({
-      setHeaders: {
-        Authorization: `Bearer ${token}`,
-      },
+      setHeaders: headers,
     });
   }
 
