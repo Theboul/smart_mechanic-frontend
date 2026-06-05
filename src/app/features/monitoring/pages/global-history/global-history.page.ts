@@ -2,7 +2,9 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MonitoringService } from '../../data-access/monitoring.service';
+import { WorkshopsService } from '@features/workshops/data-access/workshops.service';
 import { AuthStore } from '@features/identity/auth/state/auth.store';
+import { SucursalResponse } from '@core/models/workshops.model';
 import { injectQuery } from '@tanstack/angular-query-experimental';
 import { lastValueFrom } from 'rxjs';
 import { MatTableModule } from '@angular/material/table';
@@ -14,7 +16,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { LucideAngularModule, History, Search, Filter, RefreshCw } from 'lucide-angular';
 import { IncidentDetailResponse } from '@core/models/emergencies.model';
-import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from '@shared/ui';
+import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent, SearchInputComponent, SelectComponent, SelectOption } from '@shared/ui';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 @Component({
   selector: 'app-global-history',
@@ -30,10 +33,13 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
     MatInputModule,
     MatSelectModule,
     MatButtonModule,
+    MatTooltipModule,
     LucideAngularModule,
     PageHeaderComponent,
     LoadingStateComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    SearchInputComponent,
+    SelectComponent
   ],
   template: `
     <div class="page-container">
@@ -49,53 +55,66 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
         </div>
       </app-page-header>
 
-      <!-- Filtros -->
-      <div class="filters-bar sm-glass-card">
-        <div class="filter-title">
-          <lucide-icon [img]="filterIcon" [size]="15"></lucide-icon>
-          <span>Filtros</span>
+      <!-- Filtros Reutilizados -->
+      <div class="filters-container sm-glass-card">
+        <div class="filter-group">
+          <app-search-input
+            class="search-id-field"
+            [(value)]="searchId"
+            (valueChange)="onFilterChange()"
+            placeholder="Buscar por ID incidente...">
+          </app-search-input>
+
+          <app-select
+            class="sm-select"
+            [(value)]="filterEstado"
+            (valueChange)="onFilterChange()"
+            placeholder="Todos los estados"
+            [options]="statusOptions">
+          </app-select>
+
+          <app-select
+            class="sm-select"
+            [(value)]="filterPrioridad"
+            (valueChange)="onFilterChange()"
+            placeholder="Todas las prioridades"
+            [options]="priorityOptions">
+          </app-select>
+
+          @if (isOwner()) {
+            <app-select
+              class="sm-select"
+              [(value)]="filterSucursal"
+              (valueChange)="onFilterChange()"
+              placeholder="Todas las sucursales"
+              [options]="branchOptions()">
+            </app-select>
+          }
+
+          <div class="date-filter-group">
+            <span class="date-label">Desde</span>
+            <mat-form-field appearance="outline" class="sm-capsule-field date-field" subscriptSizing="dynamic">
+              <input matInput type="date" [ngModel]="filterFechaInicio()" (ngModelChange)="filterFechaInicio.set($event); onFilterChange()" />
+            </mat-form-field>
+          </div>
+
+          <div class="date-filter-group">
+            <span class="date-label">Hasta</span>
+            <mat-form-field appearance="outline" class="sm-capsule-field date-field" subscriptSizing="dynamic">
+              <input matInput type="date" [ngModel]="filterFechaFin()" (ngModelChange)="filterFechaFin.set($event); onFilterChange()" />
+            </mat-form-field>
+          </div>
         </div>
 
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Buscar por ID</mat-label>
-          <input matInput [(ngModel)]="searchId" (ngModelChange)="onFilterChange()" placeholder="ID del incidente..." />
-          <mat-icon matSuffix>search</mat-icon>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="filter-field filter-sm">
-          <mat-label>Estado</mat-label>
-          <mat-select [(ngModel)]="filterEstado" (ngModelChange)="onFilterChange()">
-            <mat-option value="">Todos</mat-option>
-            <mat-option value="PENDIENTE">Pendiente</mat-option>
-            <mat-option value="ASIGNADO">Asignado</mat-option>
-            <mat-option value="EN_CAMINO">En Camino</mat-option>
-            <mat-option value="EN_PROGRESO">En Progreso</mat-option>
-            <mat-option value="COMPLETADO">Completado</mat-option>
-            <mat-option value="CANCELADO">Cancelado</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="filter-field filter-sm">
-          <mat-label>Prioridad</mat-label>
-          <mat-select [(ngModel)]="filterPrioridad" (ngModelChange)="onFilterChange()">
-            <mat-option value="">Todas</mat-option>
-            <mat-option value="ALTA">Alta</mat-option>
-            <mat-option value="MEDIA">Media</mat-option>
-            <mat-option value="BAJA">Baja</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Fecha desde</mat-label>
-          <input matInput type="date" [(ngModel)]="filterFechaInicio" (ngModelChange)="onFilterChange()" />
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Fecha hasta</mat-label>
-          <input matInput type="date" [(ngModel)]="filterFechaFin" (ngModelChange)="onFilterChange()" />
-        </mat-form-field>
-
-        <button mat-button class="clear-btn" (click)="clearFilters()">Limpiar</button>
+        <div class="filter-actions">
+          @if (isAdminSucursal()) {
+            <span class="branch-badge sm-glass-card">📍 {{ myBranchName() }}</span>
+          }
+          <button mat-icon-button (click)="historyQuery.refetch()" matTooltip="Actualizar">
+            <lucide-icon [img]="refreshIcon" [size]="18"></lucide-icon>
+          </button>
+          <button mat-button class="clear-btn" (click)="clearFilters()">Limpiar</button>
+        </div>
       </div>
 
       <!-- Tabla -->
@@ -169,23 +188,31 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
               </td>
             </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
+            <!-- Sucursal -->
+            <ng-container matColumnDef="sucursal">
+              <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+              <td mat-cell *matCellDef="let h">
+                <span class="branch-tag">{{ h.branch_name || 'Sin sucursal asignada' }}</span>
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns();" class="table-row"></tr>
           </table>
 
           @if (filteredData().length === 0) {
             <app-empty-state 
               [icon]="historyIcon" 
-              title="Sin registros" 
-              message="No hay registros que coincidan con los filtros aplicados.">
+              [title]="emptyStateTitle()" 
+              [message]="emptyStateMessage()">
             </app-empty-state>
           }
 
           <!-- Paginador DINÁMICO -->
           <mat-paginator
             [length]="filteredData().length"
-            [pageSize]="pageSize"
-            [pageIndex]="pageIndex"
+            [pageSize]="pageSize()"
+            [pageIndex]="pageIndex()"
             [pageSizeOptions]="[10, 25, 50]"
             (page)="onPageChange($event)"
             aria-label="Páginas del historial">
@@ -199,12 +226,40 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
 
     .refresh-btn { display: flex; align-items: center; gap: 0.5rem; border-color: rgba(var(--sm-rgb-sapphire-400), 0.3); color: var(--sm-color-sapphire-400); }
 
-    /* Filtros */
-    .filters-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; padding: 1rem 1.5rem; margin-bottom: 1.5rem; }
-    .filter-title { display: flex; align-items: center; gap: 0.4rem; font-size: 0.75rem; font-weight: 600; color: var(--sm-color-sapphire-400); text-transform: uppercase; white-space: nowrap; }
-    .filter-field { flex: 1; min-width: 160px; }
-    .filter-sm { max-width: 150px; flex: 0 0 150px; }
-    .clear-btn { color: var(--sm-color-text-muted); font-size: 0.8rem; white-space: nowrap; }
+    /* Barra de Filtros Premium */
+    .filters-container {
+      padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1.5rem;
+      .filter-group { display: flex; align-items: center; gap: 0.85rem; flex: 1; flex-wrap: wrap; }
+    }
+
+    .search-id-field { flex: 1; max-width: 220px; }
+    .sm-select { width: 160px; }
+    
+    .date-filter-group {
+      display: flex; align-items: center; gap: 0.5rem;
+      .date-label { font-size: 0.72rem; font-weight: 700; color: var(--sm-color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+      .date-field { width: 155px; }
+    }
+
+    .clear-btn { color: var(--sm-color-text-muted); font-size: 0.8rem; font-weight: 600; white-space: nowrap; &:hover { color: white; } }
+    .filter-actions { 
+      display: flex; align-items: center; gap: 0.5rem;
+      button[mat-icon-button] {
+        color: var(--sm-color-text-muted);
+        &:hover { color: white; background: rgba(255, 255, 255, 0.05); }
+      }
+    }
+
+    .branch-badge {
+      display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 600; color: var(--sm-color-sapphire-400);
+      background: rgba(var(--sm-rgb-sapphire-400), 0.12); padding: 0.35rem 0.75rem; border-radius: 20px; border: 1px solid rgba(var(--sm-rgb-sapphire-400), 0.2);
+    }
+
+    .branch-tag {
+      font-size: 0.72rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 4px;
+      background: rgba(var(--sm-rgb-sapphire-400), 0.1); color: var(--sm-color-sapphire-300);
+      border: 1px solid rgba(var(--sm-rgb-sapphire-400), 0.2);
+    }
 
     /* Tabla */
     .table-card { border: none; padding: 0; }
@@ -223,9 +278,11 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
 
     .status-tag { font-size: 0.68rem; font-weight: 700; padding: 0.2rem 0.55rem; border-radius: 4px; letter-spacing: 0.03em;
       &[data-status="COMPLETADO"] { background: rgba(46,204,113,0.12); color: #2ecc71; }
+      &[data-status="FINALIZADO"]   { background: rgba(46,204,113,0.12); color: #2ecc71; }
       &[data-status="ASIGNADO"]   { background: rgba(52,152,219,0.12); color: #3498db; }
       &[data-status="EN_CAMINO"]  { background: rgba(230,126,34,0.12); color: #e67e22; }
       &[data-status="EN_PROGRESO"]{ background: rgba(241,196,15,0.12); color: #f1c40f; }
+      &[data-status="EN_ATENCION"] { background: rgba(241,196,15,0.12); color: #f1c40f; }
       &[data-status="CANCELADO"]  { background: rgba(231,76,60,0.12);  color: #e74c3c; }
       &[data-status="PENDIENTE"]  { background: rgba(var(--sm-rgb-slate-400),0.1); color: var(--sm-color-text-muted); }
     }
@@ -249,13 +306,26 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
 export class GlobalHistoryPage {
   private monitoringService = inject(MonitoringService);
   private authStore         = inject(AuthStore);
+  private workshopsService  = inject(WorkshopsService);
 
   readonly historyIcon = History;
   readonly filterIcon  = Filter;
   readonly refreshIcon = RefreshCw;
 
-  // Título dinámico según rol
   isSuperAdmin = computed(() => this.authStore.user()?.rol_nombre === 'superadmin');
+
+  isOwner = computed(() => {
+    const user = this.authStore.user();
+    return (user?.rol_nombre || '').toLowerCase().trim() === 'admin_taller' && user?.rol_contexto === 'owner';
+  });
+
+  isAdminSucursal = computed(() => {
+    const user = this.authStore.user();
+    return (user?.rol_nombre || '').toLowerCase().trim() === 'admin_taller' && user?.rol_contexto === 'admin_sucursal';
+  });
+
+  branches = signal<SucursalResponse[]>([]);
+  myBranchName = signal<string>('Sin sucursal asignada');
 
   pageTitle = computed(() =>
     this.isSuperAdmin()
@@ -269,16 +339,50 @@ export class GlobalHistoryPage {
       : 'Registro de todos los servicios prestados por tu taller.'
   );
 
-  displayedColumns = ['id', 'fecha', 'estado', 'prioridad', 'resumen', 'taller'];
+  displayedColumns = computed(() => {
+    if (this.isSuperAdmin()) {
+      return ['id', 'fecha', 'estado', 'prioridad', 'resumen', 'taller'];
+    }
+    if (this.isOwner()) {
+      return ['id', 'fecha', 'estado', 'prioridad', 'resumen', 'sucursal'];
+    }
+    return ['id', 'fecha', 'estado', 'prioridad', 'resumen'];
+  });
 
-  // Estado de filtros
-  searchId          = '';
-  filterEstado      = '';
-  filterPrioridad   = '';
-  filterFechaInicio = '';
-  filterFechaFin    = '';
-  pageSize          = 10;
-  pageIndex         = 0;
+  // Opciones para Selectores de Filtro
+  statusOptions: SelectOption[] = [
+    { value: 'PENDIENTE', label: 'Pendiente' },
+    { value: 'ASIGNADO', label: 'Asignado' },
+    { value: 'EN_CAMINO', label: 'En Camino' },
+    { value: 'EN_ATENCION', label: 'En Atención' },
+    { value: 'EN_PROGRESO', label: 'En Progreso' },
+    { value: 'FINALIZADO', label: 'Finalizado' },
+    { value: 'COMPLETADO', label: 'Completado' },
+    { value: 'CANCELADO', label: 'Cancelado' }
+  ];
+
+  priorityOptions: SelectOption[] = [
+    { value: 'ALTA', label: 'Alta' },
+    { value: 'MEDIA', label: 'Media' },
+    { value: 'BAJA', label: 'Baja' }
+  ];
+
+  branchOptions = computed<SelectOption[]>(() => {
+    return [
+      { value: '', label: 'Todas las sucursales' },
+      ...this.branches().map(b => ({ value: b.id_sucursal, label: b.nombre }))
+    ];
+  });
+
+  // Estado de filtros (Signals para reactividad)
+  searchId          = signal('');
+  filterEstado      = signal('');
+  filterPrioridad   = signal('');
+  filterSucursal    = signal('');
+  filterFechaInicio = signal('');
+  filterFechaFin    = signal('');
+  pageSize          = signal(10);
+  pageIndex         = signal(0);
 
   // Carga TODOS los datos; el filtrado y paginación se hacen en el cliente
   historyQuery = injectQuery(() => ({
@@ -286,27 +390,61 @@ export class GlobalHistoryPage {
     queryFn: () => lastValueFrom(this.monitoringService.getGlobalHistory())
   }));
 
+  constructor() {
+    if (this.isOwner()) {
+      this.workshopsService.getBranches().subscribe({
+        next: (res) => {
+          this.branches.set(res || []);
+        }
+      });
+    } else if (this.isAdminSucursal()) {
+      this.workshopsService.getMyBranch().subscribe({
+        next: (res) => {
+          if (res) this.myBranchName.set(res.nombre);
+        }
+      });
+    }
+  }
+
+  // ── Mensajes de Estado Vacío Dinámicos ─────────────────────────────────────
+  emptyStateTitle = computed(() => {
+    if ((this.isOwner() && this.filterSucursal()) || this.isAdminSucursal()) {
+      return 'Sin registros para sucursal';
+    }
+    return 'Sin registros';
+  });
+
+  emptyStateMessage = computed(() => {
+    if ((this.isOwner() && this.filterSucursal()) || this.isAdminSucursal()) {
+      return 'No hay servicios registrados para esta sucursal';
+    }
+    return 'No hay registros que coincidan con los filtros aplicados.';
+  });
+
   // ── Filtrado reactivo ──────────────────────────────────────────────────────
   filteredData = computed(() => {
     let data = (this.historyQuery.data() as IncidentDetailResponse[]) ?? [];
 
-    if (this.searchId) {
-      const q = this.searchId.toLowerCase();
+    if (this.searchId()) {
+      const q = this.searchId().toLowerCase();
       data = data.filter((h: IncidentDetailResponse) => h.id_incidente?.toLowerCase().includes(q));
     }
-    if (this.filterEstado) {
-      data = data.filter((h: IncidentDetailResponse) => h.estado_incidente === this.filterEstado);
+    if (this.filterEstado()) {
+      data = data.filter((h: IncidentDetailResponse) => h.estado_incidente === this.filterEstado());
     }
-    if (this.filterPrioridad) {
-      data = data.filter((h: IncidentDetailResponse) => h.prioridad_incidente === this.filterPrioridad);
+    if (this.filterPrioridad()) {
+      data = data.filter((h: IncidentDetailResponse) => h.prioridad_incidente === this.filterPrioridad());
     }
-    if (this.filterFechaInicio) {
-      const desde = new Date(this.filterFechaInicio).getTime();
+    if (this.filterFechaInicio()) {
+      const desde = new Date(this.filterFechaInicio()).getTime();
       data = data.filter((h: IncidentDetailResponse) => h.fecha_reporte ? new Date(h.fecha_reporte).getTime() >= desde : true);
     }
-    if (this.filterFechaFin) {
-      const hasta = new Date(this.filterFechaFin + 'T23:59:59').getTime();
+    if (this.filterFechaFin()) {
+      const hasta = new Date(this.filterFechaFin() + 'T23:59:59').getTime();
       data = data.filter((h: IncidentDetailResponse) => h.fecha_reporte ? new Date(h.fecha_reporte).getTime() <= hasta : true);
+    }
+    if (this.isOwner() && this.filterSucursal()) {
+      data = data.filter((h: IncidentDetailResponse) => h.id_sucursal === this.filterSucursal());
     }
 
     return data;
@@ -314,25 +452,26 @@ export class GlobalHistoryPage {
 
   // ── Paginación dinámica ────────────────────────────────────────────────────
   pagedData = computed(() => {
-    const start = this.pageIndex * this.pageSize;
-    return this.filteredData().slice(start, start + this.pageSize);
+    const start = this.pageIndex() * this.pageSize();
+    return this.filteredData().slice(start, start + this.pageSize());
   });
 
   onFilterChange() {
-    this.pageIndex = 0; // Resetear a primera página al filtrar
+    this.pageIndex.set(0); // Resetear a primera página al filtrar
   }
 
   onPageChange(event: PageEvent) {
-    this.pageIndex = event.pageIndex;
-    this.pageSize  = event.pageSize;
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
   }
 
   clearFilters() {
-    this.searchId          = '';
-    this.filterEstado      = '';
-    this.filterPrioridad   = '';
-    this.filterFechaInicio = '';
-    this.filterFechaFin    = '';
-    this.pageIndex         = 0;
+    this.searchId.set('');
+    this.filterEstado.set('');
+    this.filterPrioridad.set('');
+    this.filterSucursal.set('');
+    this.filterFechaInicio.set('');
+    this.filterFechaFin.set('');
+    this.pageIndex.set(0);
   }
 }

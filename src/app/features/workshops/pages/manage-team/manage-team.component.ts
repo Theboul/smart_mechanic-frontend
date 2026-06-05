@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
 import { WorkshopsService } from '../../data-access/workshops.service';
-import { TecnicoCreate, TecnicoResponse } from '@core/models/workshops.model';
+import { TecnicoCreate, TecnicoResponse, SucursalResponse } from '@core/models/workshops.model';
 import { injectQuery, injectMutation, injectQueryClient } from '@tanstack/angular-query-experimental';
 import { lastValueFrom } from 'rxjs';
 import { MatTableModule } from '@angular/material/table';
@@ -18,7 +18,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { LucideAngularModule, Users, UserPlus, Search, Filter, RefreshCw, Mail, Phone, Shield, Pencil, PowerOff, Power, X } from 'lucide-angular';
-import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from '@shared/ui';
+import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent, SearchInputComponent, SelectComponent, SelectOption } from '@shared/ui';
+import { AuthStore } from '@features/identity/auth';
 
 @Component({
   selector: 'app-manage-team',
@@ -41,7 +42,9 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
     LucideAngularModule,
     PageHeaderComponent,
     LoadingStateComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    SearchInputComponent,
+    SelectComponent
   ],
   template: `
     <div class="page-container">
@@ -50,12 +53,34 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
         subtitle="Administra el personal técnico y administrativo de tu taller."
         [icon]="usersIcon">
         <div actions>
-          <button mat-flat-button color="primary" class="btn-add" (click)="openCreateForm()">
+          <button mat-flat-button color="primary" class="btn-add" 
+            [disabled]="isOwner() && !filterSucursal()"
+            [matTooltip]="(isOwner() && !filterSucursal()) ? 'Seleccione una sucursal para registrar un nuevo miembro' : ''"
+            (click)="openCreateForm()">
             <lucide-icon [img]="userPlusIcon" [size]="18"></lucide-icon>
             Nuevo Miembro
           </button>
         </div>
       </app-page-header>
+
+      <!-- Stats Bar -->
+      <div class="stats-bar">
+        <div class="stat-item sm-glass-card">
+          <lucide-icon [img]="usersIcon" [size]="18" class="stat-icon total"></lucide-icon>
+          <span class="label">Total Personal</span>
+          <span class="value">{{ totalTechs() }}</span>
+        </div>
+        <div class="stat-item sm-glass-card">
+          <lucide-icon [img]="powerIcon" [size]="18" class="stat-icon active"></lucide-icon>
+          <span class="label">Disponibles</span>
+          <span class="value active">{{ disponiblesTechs() }}</span>
+        </div>
+        <div class="stat-item sm-glass-card">
+          <lucide-icon [img]="powerOffIcon" [size]="18" class="stat-icon inactive"></lucide-icon>
+          <span class="label">Inactivos / No Disponibles</span>
+          <span class="value inactive">{{ inactivosTechs() }}</span>
+        </div>
+      </div>
 
       <!-- Formulario de Crear / Editar -->
       @if (showForm()) {
@@ -98,23 +123,42 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
       }
 
       <!-- Filtros -->
-      <div class="filters-bar sm-glass-card">
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Buscar por nombre</mat-label>
-          <input matInput [(ngModel)]="searchText" (ngModelChange)="applyFilter()" placeholder="Nombre del técnico..." />
-          <mat-icon matSuffix>search</mat-icon>
-        </mat-form-field>
+      <!-- Filtros Reutilizados -->
+      <div class="filters-container sm-glass-card">
+        <div class="filter-group">
+          <app-search-input
+            class="search-id-field"
+            [(value)]="searchText"
+            (valueChange)="applyFilter()"
+            placeholder="Buscar por nombre...">
+          </app-search-input>
 
-        <mat-form-field appearance="outline" class="filter-field filter-small">
-          <mat-label>Estado</mat-label>
-          <mat-select [(ngModel)]="filterEstado" (ngModelChange)="applyFilter()">
-            <mat-option value="">Todos</mat-option>
-            <mat-option value="activo">Activos</mat-option>
-            <mat-option value="inactivo">Inactivos</mat-option>
-          </mat-select>
-        </mat-form-field>
+          <app-select
+            class="sm-select"
+            [(value)]="filterEstado"
+            (valueChange)="applyFilter()"
+            placeholder="Todos los estados"
+            [options]="estadoOptions">
+          </app-select>
 
-        <span class="results-count">{{ filteredTechs().length }} técnico(s)</span>
+          @if (isOwner()) {
+            <app-select
+              class="sm-select"
+              [(value)]="filterSucursal"
+              (valueChange)="applyFilter()"
+              placeholder="Todas las sucursales"
+              [options]="branchOptions()">
+            </app-select>
+          }
+        </div>
+
+        <div class="filter-actions">
+          @if (isAdminSucursal()) {
+            <span class="branch-badge sm-glass-card">📍 {{ myBranchName() }}</span>
+          }
+          <span class="results-count">{{ filteredTechs().length }} técnico(s)</span>
+          <button mat-button class="clear-btn" (click)="clearFilters()">Limpiar</button>
+        </div>
       </div>
 
       <!-- Tabla -->
@@ -153,6 +197,14 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
               </td>
             </ng-container>
 
+            <!-- Sucursal -->
+            <ng-container matColumnDef="sucursal">
+              <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+              <td mat-cell *matCellDef="let tech">
+                <span class="branch-tag">{{ tech.branch_name || 'Sin sucursal asignada' }}</span>
+              </td>
+            </ng-container>
+
             <!-- Estado -->
             <ng-container matColumnDef="estado">
               <th mat-header-cell *matHeaderCellDef>Estado</th>
@@ -185,8 +237,8 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
               </td>
             </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns();" class="table-row"></tr>
           </table>
 
           @if (filteredTechs().length === 0) {
@@ -199,7 +251,8 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
 
           <mat-paginator
             [length]="filteredTechs().length"
-            [pageSize]="pageSize"
+            [pageSize]="pageSize()"
+            [pageIndex]="pageIndex()"
             [pageSizeOptions]="[5, 10, 25]"
             (page)="onPageChange($event)"
             aria-label="Página de técnicos">
@@ -223,11 +276,57 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
     .tech-form { display: flex; flex-direction: column; gap: 0.75rem; }
     .form-actions { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem; }
 
-    /* Filtros */
-    .filters-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 1rem 1.5rem; margin-bottom: 1.5rem; }
-    .filter-field { flex: 1; min-width: 200px; }
-    .filter-small { max-width: 160px; }
-    .results-count { margin-left: auto; font-size: 0.8rem; color: var(--sm-color-text-muted); white-space: nowrap; }
+    /* Barra de Filtros Premium */
+    .filters-container {
+      padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1.5rem;
+      .filter-group { display: flex; align-items: center; gap: 0.85rem; flex: 1; flex-wrap: wrap; }
+    }
+
+    .search-id-field { flex: 1; max-width: 220px; }
+    .sm-select { width: 160px; }
+    
+    .clear-btn { color: var(--sm-color-text-muted); font-size: 0.8rem; font-weight: 600; white-space: nowrap; &:hover { color: white; } }
+    .filter-actions { 
+      display: flex; align-items: center; gap: 1rem; margin-left: auto;
+      .results-count { font-size: 0.8rem; color: var(--sm-color-text-muted); white-space: nowrap; }
+    }
+
+    .branch-badge {
+      display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 600; color: var(--sm-color-sapphire-400);
+      background: rgba(var(--sm-rgb-sapphire-400), 0.12); padding: 0.35rem 0.75rem; border-radius: 20px; border: 1px solid rgba(var(--sm-rgb-sapphire-400), 0.2);
+    }
+
+    .branch-tag {
+      font-size: 0.72rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 4px;
+      background: rgba(var(--sm-rgb-sapphire-400), 0.1); color: var(--sm-color-sapphire-300);
+      border: 1px solid rgba(var(--sm-rgb-sapphire-400), 0.2);
+    }
+
+    /* Stats Bar */
+    .stats-bar { display: flex; gap: 1rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
+    .stat-item { padding: 1.1rem 1.5rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.25rem; min-width: 160px; flex: 1; border-radius: 12px;
+      .label { font-size: 0.7rem; color: var(--sm-color-text-muted); text-transform: uppercase; letter-spacing: .05em; }
+      .value { font-size: 1.7rem; font-weight: 800; color: var(--sm-color-sapphire-400);
+        &.active { color: #2ecc71; }
+        &.inactive { color: var(--sm-color-text-muted); }
+      }
+      .stat-icon { &.total { color: var(--sm-color-sapphire-400); } &.active { color: #2ecc71; } &.inactive { color: var(--sm-color-text-muted); } }
+    }
+
+    @media (max-width: 768px) {
+      .page-container { padding: 1rem; }
+      .filters-container {
+        flex-direction: column; align-items: stretch; gap: 1rem; padding: 1rem;
+        .filter-group { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+        .search-id-field { max-width: 100%; }
+        .sm-select { width: 100%; }
+        .filter-actions {
+          width: 100%; justify-content: space-between;
+          .results-count { order: 2; }
+          .clear-btn { order: 1; }
+        }
+      }
+    }
 
     /* Tabla */
     .table-card { border-radius: 12px; overflow: hidden; }
@@ -264,6 +363,7 @@ import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from 
   `]
 })
 export class ManageTeamComponent {
+  private authStore       = inject(AuthStore);
   private fb              = inject(FormBuilder);
   private workshopsService = inject(WorkshopsService);
   private snackBar        = inject(MatSnackBar);
@@ -277,15 +377,51 @@ export class ManageTeamComponent {
   readonly powerIcon    = Power;
   readonly closeIcon    = X;
 
-  displayedColumns = ['nombre', 'telefono', 'estado', 'acciones'];
+  // Estado de roles
+  isOwner = computed(() => {
+    const user = this.authStore.user();
+    return (user?.rol_nombre || '').toLowerCase().trim() === 'admin_taller' && user?.rol_contexto === 'owner';
+  });
+
+  isAdminSucursal = computed(() => {
+    const user = this.authStore.user();
+    return (user?.rol_nombre || '').toLowerCase().trim() === 'admin_taller' && user?.rol_contexto === 'admin_sucursal';
+  });
+
+  branches = signal<SucursalResponse[]>([]);
+  myBranchName = signal<string>('Sin sucursal asignada');
+
+  // Columnas dinámicas
+  displayedColumns = computed(() => {
+    if (this.isOwner()) {
+      return ['nombre', 'telefono', 'sucursal', 'estado', 'acciones'];
+    }
+    return ['nombre', 'telefono', 'estado', 'acciones'];
+  });
 
   // Estado UI
   showForm    = signal(false);
   editingTech = signal<TecnicoResponse | null>(null);
-  searchText  = '';
-  filterEstado = '';
-  pageSize    = 10;
-  pageIndex   = 0;
+
+  // Opciones para Selector de Estado
+  estadoOptions: SelectOption[] = [
+    { value: 'activo', label: 'Activos' },
+    { value: 'inactivo', label: 'Inactivos' }
+  ];
+
+  branchOptions = computed<SelectOption[]>(() => {
+    return [
+      { value: '', label: 'Todas las sucursales' },
+      ...this.branches().map(b => ({ value: b.id_sucursal, label: b.nombre }))
+    ];
+  });
+
+  // Estado de filtros y paginación (Signals para reactividad)
+  searchText   = signal('');
+  filterEstado = signal('');
+  filterSucursal = signal('');
+  pageSize     = signal(10);
+  pageIndex    = signal(0);
 
   techForm = this.fb.nonNullable.group({
     nombre:   ['', Validators.required],
@@ -299,25 +435,56 @@ export class ManageTeamComponent {
     queryFn: () => lastValueFrom(this.workshopsService.getTechnicians())
   }));
 
+  constructor() {
+    if (this.isOwner()) {
+      this.workshopsService.getBranches().subscribe({
+        next: (res) => {
+          this.branches.set(res || []);
+        }
+      });
+    } else if (this.isAdminSucursal()) {
+      this.workshopsService.getMyBranch().subscribe({
+        next: (res) => {
+          if (res) this.myBranchName.set(res.nombre);
+        }
+      });
+    }
+  }
+
   // ── Filtrado y paginación local ────────────────────────────────────────────
   filteredTechs = computed(() => {
     let data = this.techsQuery.data() ?? [];
-    if (this.searchText) {
-      const q = this.searchText.toLowerCase();
+    if (this.searchText()) {
+      const q = this.searchText().toLowerCase();
       data = data.filter(t => t.nombre.toLowerCase().includes(q));
     }
-    if (this.filterEstado === 'activo')   data = data.filter(t => t.estado);
-    if (this.filterEstado === 'inactivo') data = data.filter(t => !t.estado);
+    if (this.filterEstado() === 'activo')   data = data.filter(t => t.estado);
+    if (this.filterEstado() === 'inactivo') data = data.filter(t => !t.estado);
+    if (this.isOwner() && this.filterSucursal()) {
+      data = data.filter(t => t.id_sucursal === this.filterSucursal());
+    }
     return data;
   });
 
+  // KPIs reactivos
+  totalTechs = computed(() => this.filteredTechs().length);
+  disponiblesTechs = computed(() => this.filteredTechs().filter(t => t.estado).length);
+  inactivosTechs = computed(() => this.filteredTechs().filter(t => !t.estado).length);
+
   pagedTechs = computed(() => {
-    const start = this.pageIndex * this.pageSize;
-    return this.filteredTechs().slice(start, start + this.pageSize);
+    const start = this.pageIndex() * this.pageSize();
+    return this.filteredTechs().slice(start, start + this.pageSize());
   });
 
-  applyFilter() { this.pageIndex = 0; }
-  onPageChange(e: PageEvent) { this.pageIndex = e.pageIndex; this.pageSize = e.pageSize; }
+  applyFilter() { this.pageIndex.set(0); }
+  onPageChange(e: PageEvent) { this.pageIndex.set(e.pageIndex); this.pageSize.set(e.pageSize); }
+
+  clearFilters() {
+    this.searchText.set('');
+    this.filterEstado.set('');
+    this.filterSucursal.set('');
+    this.pageIndex.set(0);
+  }
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   createMutation = injectMutation(() => ({

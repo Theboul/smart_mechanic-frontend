@@ -6,6 +6,7 @@ import { FormsModule } from '@angular/forms';
 import { EmergenciesService } from '../../data-access/emergencies.service';
 import { WorkshopsService } from '@features/workshops/data-access/workshops.service';
 import { AuthStore } from '@features/identity/auth/state/auth.store';
+import { SucursalResponse } from '@core/models/workshops.model';
 import { injectQuery } from '@tanstack/angular-query-experimental';
 import { lastValueFrom } from 'rxjs';
 import { MatTableModule } from '@angular/material/table';
@@ -15,8 +16,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
-import { LucideAngularModule, Activity, Map as MapIcon, Shield, Radio, Search, Filter, Layers, Navigation, Siren, CheckCircle, Clock, RefreshCw, AlertTriangle } from 'lucide-angular';
-import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from '@shared/ui';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { LucideAngularModule, Activity, Search, Filter, Siren, CheckCircle, Clock, RefreshCw, AlertTriangle } from 'lucide-angular';
+import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent, SearchInputComponent, SelectComponent, SelectOption } from '@shared/ui';
 import { PushNotificationService } from '@core/services/push-notification.service';
 
 
@@ -33,10 +35,13 @@ import { PushNotificationService } from '@core/services/push-notification.servic
     MatSelectModule,
     MatButtonModule,
     MatChipsModule,
+    MatTooltipModule,
     LucideAngularModule,
     PageHeaderComponent,
     LoadingStateComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    SearchInputComponent,
+    SelectComponent
   ],
   template: `
     <div class="page-container">
@@ -90,63 +95,76 @@ import { PushNotificationService } from '@core/services/push-notification.servic
           </div>
         </div>
 
-        <!-- Filtros -->
-        <div class="filters-bar sm-glass-card">
-          <div class="filter-title">
-            <lucide-icon [img]="filterIcon" [size]="14"></lucide-icon>
-            <span>Filtros</span>
+        <!-- Filtros Reutilizados de Gestión de Usuarios -->
+        <div class="filters-container sm-glass-card">
+          <div class="filter-group">
+            <app-search-input
+              class="search-id-field"
+              [(value)]="searchId"
+              (valueChange)="onFilterChange()"
+              placeholder="Buscar por ID incidente...">
+            </app-search-input>
+
+            <app-select
+              class="sm-select"
+              [(value)]="filterEstado"
+              (valueChange)="onFilterChange()"
+              placeholder="Todos los estados"
+              [options]="statusOptions">
+            </app-select>
+
+            <app-select
+              class="sm-select"
+              [(value)]="filterPrioridad"
+              (valueChange)="onFilterChange()"
+              placeholder="Todas las prioridades"
+              [options]="priorityOptions">
+            </app-select>
+
+            @if (isSuperAdmin()) {
+              <app-select
+                class="sm-select"
+                [(value)]="filterTaller"
+                (valueChange)="onFilterChange()"
+                placeholder="Todos los talleres"
+                [options]="workshopFilterOptions">
+              </app-select>
+            }
+
+            @if (isOwner()) {
+              <app-select
+                class="sm-select"
+                [(value)]="filterSucursal"
+                (valueChange)="onFilterChange()"
+                placeholder="Todas las sucursales"
+                [options]="branchOptions()">
+              </app-select>
+            }
+
+            <div class="date-filter-group">
+              <span class="date-label">Desde</span>
+              <mat-form-field appearance="outline" class="sm-capsule-field date-field" subscriptSizing="dynamic">
+                <input matInput type="date" [ngModel]="filterFechaInicio()" (ngModelChange)="filterFechaInicio.set($event); onFilterChange()" />
+              </mat-form-field>
+            </div>
+
+            <div class="date-filter-group">
+              <span class="date-label">Hasta</span>
+              <mat-form-field appearance="outline" class="sm-capsule-field date-field" subscriptSizing="dynamic">
+                <input matInput type="date" [ngModel]="filterFechaFin()" (ngModelChange)="filterFechaFin.set($event); onFilterChange()" />
+              </mat-form-field>
+            </div>
           </div>
 
-          <mat-form-field appearance="outline" class="filter-field">
-            <mat-label>Buscar por ID</mat-label>
-            <input matInput [ngModel]="searchId()" (ngModelChange)="searchId.set($event); onFilterChange()" placeholder="ID incidente..." />
-            <lucide-icon [img]="searchIcon" [size]="16" matSuffix></lucide-icon>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="filter-field filter-sm">
-            <mat-label>Estado</mat-label>
-            <mat-select [ngModel]="filterEstado()" (ngModelChange)="filterEstado.set($event); onFilterChange()">
-              <mat-option value="">Todos</mat-option>
-              <mat-option value="PENDIENTE">Pendiente</mat-option>
-              <mat-option value="ASIGNADO">Asignado</mat-option>
-              <mat-option value="EN_CAMINO">En Camino</mat-option>
-              <mat-option value="EN_PROGRESO">En Progreso</mat-option>
-              <mat-option value="COMPLETADO">Completado</mat-option>
-              <mat-option value="CANCELADO">Cancelado</mat-option>
-            </mat-select>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="filter-field filter-sm">
-            <mat-label>Prioridad</mat-label>
-            <mat-select [ngModel]="filterPrioridad()" (ngModelChange)="filterPrioridad.set($event); onFilterChange()">
-              <mat-option value="">Todas</mat-option>
-              <mat-option value="CRITICA">Crítica</mat-option>
-              <mat-option value="ALTA">Alta</mat-option>
-              <mat-option value="MEDIA">Media</mat-option>
-              <mat-option value="BAJA">Baja</mat-option>
-            </mat-select>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="filter-field filter-sm">
-            <mat-label>Taller</mat-label>
-            <mat-select [ngModel]="filterTaller()" (ngModelChange)="filterTaller.set($event); onFilterChange()">
-              <mat-option value="">Todos</mat-option>
-              <mat-option value="asignado">Con taller</mat-option>
-              <mat-option value="sin_asignar">Sin asignar</mat-option>
-            </mat-select>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="filter-field date-filter">
-            <mat-label>Fecha desde</mat-label>
-            <input matInput type="date" [ngModel]="filterFechaInicio()" (ngModelChange)="filterFechaInicio.set($event); onFilterChange()" />
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="filter-field date-filter">
-            <mat-label>Fecha hasta</mat-label>
-            <input matInput type="date" [ngModel]="filterFechaFin()" (ngModelChange)="filterFechaFin.set($event); onFilterChange()" />
-          </mat-form-field>
-
-          <button mat-button class="clear-btn" (click)="clearFilters()">Limpiar</button>
+          <div class="filter-actions">
+            @if (isAdminSucursal()) {
+              <span class="branch-badge sm-glass-card">📍 {{ myBranchName() }}</span>
+            }
+            <button mat-icon-button (click)="incidentsQuery.refetch()" matTooltip="Actualizar">
+              <lucide-icon [img]="refreshIcon" [size]="18"></lucide-icon>
+            </button>
+            <button mat-button class="clear-btn" (click)="clearFilters()">Limpiar</button>
+          </div>
         </div>
 
         <!-- Tabla -->
@@ -205,6 +223,14 @@ import { PushNotificationService } from '@core/services/push-notification.servic
               </td>
             </ng-container>
 
+            <!-- Sucursal -->
+            <ng-container matColumnDef="sucursal">
+              <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+              <td mat-cell *matCellDef="let inc">
+                <span class="branch-tag">{{ inc.branch_name || 'Sin sucursal asignada' }}</span>
+              </td>
+            </ng-container>
+
             <!-- Estado -->
             <ng-container matColumnDef="estado">
               <th mat-header-cell *matHeaderCellDef>Estado</th>
@@ -215,8 +241,8 @@ import { PushNotificationService } from '@core/services/push-notification.servic
               </td>
             </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
+            <tr mat-header-row *matHeaderRowDef="displayedColumns()"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns();" class="table-row"></tr>
           </table>
 
           @if (filteredData().length === 0 && !incidentsQuery.isLoading()) {
@@ -264,13 +290,40 @@ import { PushNotificationService } from '@core/services/push-notification.servic
       .stat-icon { &.total { color: var(--sm-color-sapphire-400); } &.active { color: #f1c40f; } &.high { color: #e74c3c; } &.done { color: #2ecc71; } }
     }
 
-    /* Filtros */
-    .filters-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; padding: 1rem 1.5rem; margin-bottom: 1.25rem; }
-    .filter-title { display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; font-weight: 600; color: var(--sm-color-sapphire-400); text-transform: uppercase; white-space: nowrap; }
-    .filter-field { flex: 1; min-width: 180px; max-width: 250px; }
-    .filter-sm { max-width: 150px; }
-    .date-filter { max-width: 200px; }
-    .clear-btn { color: var(--sm-color-sapphire-400); font-size: 0.8rem; font-weight: 600; white-space: nowrap; &:hover { color: var(--sm-color-sapphire-300); } }
+    /* Barra de Filtros Premium */
+    .filters-container {
+      padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; gap: 1.5rem;
+      .filter-group { display: flex; align-items: center; gap: 0.85rem; flex: 1; flex-wrap: wrap; }
+    }
+
+    .search-id-field { flex: 1; max-width: 220px; }
+    .sm-select { width: 160px; }
+    
+    .date-filter-group {
+      display: flex; align-items: center; gap: 0.5rem;
+      .date-label { font-size: 0.72rem; font-weight: 700; color: var(--sm-color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+      .date-field { width: 155px; }
+    }
+
+    .clear-btn { color: var(--sm-color-text-muted); font-size: 0.8rem; font-weight: 600; white-space: nowrap; &:hover { color: white; } }
+    .filter-actions { 
+      display: flex; align-items: center; gap: 0.5rem;
+      button[mat-icon-button] {
+        color: var(--sm-color-text-muted);
+        &:hover { color: white; background: rgba(255, 255, 255, 0.05); }
+      }
+    }
+
+    .branch-badge {
+      display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 600; color: var(--sm-color-sapphire-400);
+      background: rgba(var(--sm-rgb-sapphire-400), 0.12); padding: 0.35rem 0.75rem; border-radius: 20px; border: 1px solid rgba(var(--sm-rgb-sapphire-400), 0.2);
+    }
+
+    .branch-tag {
+      font-size: 0.72rem; font-weight: 600; padding: 0.2rem 0.6rem; border-radius: 4px;
+      background: rgba(var(--sm-rgb-sapphire-400), 0.1); color: var(--sm-color-sapphire-300);
+      border: 1px solid rgba(var(--sm-rgb-sapphire-400), 0.2);
+    }
 
     /* Tabla */
     .table-container { border-radius: 12px; overflow: auto; background: var(--sm-color-gunmetal-900); border: 1px solid rgba(255,255,255,0.05); }
@@ -296,8 +349,12 @@ import { PushNotificationService } from '@core/services/push-notification.servic
 
     .status-badge { padding: .2rem .55rem; border-radius: 4px; font-size: .68rem; font-weight: 700;
       &[data-s="COMPLETADO"]   { background: rgba(46,204,113,.12);  color: #2ecc71; }
+      &[data-s="FINALIZADO"]   { background: rgba(46,204,113,.12);  color: #2ecc71; }
       &[data-s="ASIGNADO"]     { background: rgba(52,152,219,.12);  color: #3498db; }
       &[data-s="EN_CAMINO"]    { background: rgba(230,126,34,.12);  color: #e67e22; }
+      &[data-s="TECNICO_EN_SITIO"] { background: rgba(52,152,219,.12); color: #3498db; }
+      &[data-s="TECNICO_RECHAZADO"] { background: rgba(231,76,60,.12); color: #e74c3c; }
+      &[data-s="EN_ATENCION"]  { background: rgba(241,196,15,.12);  color: #f1c40f; }
       &[data-s="EN_PROGRESO"]  { background: rgba(241,196,15,.12);  color: #f1c40f; }
       &[data-s="CANCELADO"]    { background: rgba(231,76,60,.12);   color: #e74c3c; }
       &[data-s="PENDIENTE"]    { background: rgba(var(--sm-rgb-slate-400),.1); color: var(--sm-color-text-muted); }
@@ -310,24 +367,60 @@ import { PushNotificationService } from '@core/services/push-notification.servic
 
     @keyframes spin  { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     @keyframes pulse { 0%  { box-shadow: 0 0 0 0 rgba(231,76,60,.7); } 70% { box-shadow: 0 0 0 10px rgba(231,76,60,0); } 100% { box-shadow: 0 0 0 0 rgba(231,76,60,0); } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 768px) {
+      .page-container { padding: 1rem; }
+      .stats-bar { gap: 0.75rem; }
+      .filters-container {
+        flex-direction: column; align-items: stretch; gap: 1rem; padding: 1rem;
+        .filter-group { flex-direction: column; align-items: stretch; gap: 0.75rem; }
+        .search-id-field { max-width: 100%; }
+        .sm-select { width: 100%; }
+        .date-filter-group {
+          width: 100%; justify-content: space-between;
+          .date-field { width: 70%; max-width: 250px; }
+        }
+      }
+    }
   `]
 })
 export class GlobalMonitorComponent {
   private emergenciesService = inject(EmergenciesService);
   private authStore          = inject(AuthStore);
+  private workshopsService   = inject(WorkshopsService);
 
   readonly sirenIcon    = Siren;
   readonly activityIcon = Activity;
   readonly clockIcon    = Clock;
   readonly alertIcon    = AlertTriangle;
   readonly checkIcon    = CheckCircle;
-  readonly filterIcon   = Filter;
   readonly refreshIcon  = RefreshCw;
-  readonly searchIcon   = Search;
-
-  displayedColumns = ['prioridad', 'id', 'fecha', 'resumen', 'taller', 'estado'];
 
   isSuperAdmin = computed(() => this.authStore.user()?.rol_nombre === 'superadmin');
+  
+  isOwner = computed(() => {
+    const user = this.authStore.user();
+    return (user?.rol_nombre || '').toLowerCase().trim() === 'admin_taller' && user?.rol_contexto === 'owner';
+  });
+
+  isAdminSucursal = computed(() => {
+    const user = this.authStore.user();
+    return (user?.rol_nombre || '').toLowerCase().trim() === 'admin_taller' && user?.rol_contexto === 'admin_sucursal';
+  });
+
+  branches = signal<SucursalResponse[]>([]);
+  myBranchName = signal<string>('Sin sucursal asignada');
+
+  displayedColumns = computed(() => {
+    if (this.isSuperAdmin()) {
+      return ['prioridad', 'id', 'fecha', 'resumen', 'taller', 'estado'];
+    }
+    if (this.isOwner()) {
+      return ['prioridad', 'id', 'fecha', 'resumen', 'sucursal', 'estado'];
+    }
+    return ['prioridad', 'id', 'fecha', 'resumen', 'estado'];
+  });
 
   pageTitle = computed(() =>
     this.isSuperAdmin()
@@ -341,11 +434,45 @@ export class GlobalMonitorComponent {
       : 'Seguimiento de los incidentes asignados a tu taller.'
   );
 
+  // Opciones de Selectores
+  statusOptions: SelectOption[] = [
+    { value: 'PENDIENTE', label: 'Pendiente' },
+    { value: 'ASIGNADO', label: 'Asignado' },
+    { value: 'EN_CAMINO', label: 'En Camino' },
+    { value: 'TECNICO_EN_SITIO', label: 'Técnico en Sitio' },
+    { value: 'TECNICO_RECHAZADO', label: 'Técnico Rechazado' },
+    { value: 'EN_ATENCION', label: 'En Atención' },
+    { value: 'EN_PROGRESO', label: 'En Progreso' },
+    { value: 'FINALIZADO', label: 'Finalizado' },
+    { value: 'COMPLETADO', label: 'Completado' },
+    { value: 'CANCELADO', label: 'Cancelado' }
+  ];
+
+  priorityOptions: SelectOption[] = [
+    { value: 'CRITICA', label: 'Crítica' },
+    { value: 'ALTA', label: 'Alta' },
+    { value: 'MEDIA', label: 'Media' },
+    { value: 'BAJA', label: 'Baja' }
+  ];
+
+  workshopFilterOptions: SelectOption[] = [
+    { value: 'asignado', label: 'Con taller' },
+    { value: 'sin_asignar', label: 'Sin asignar' }
+  ];
+
+  branchOptions = computed<SelectOption[]>(() => {
+    return [
+      { value: '', label: 'Todas las sucursales' },
+      ...this.branches().map(b => ({ value: b.id_sucursal, label: b.nombre }))
+    ];
+  });
+
   // ── Filtros (Signals para reactividad) ───────────────────────────────────
   searchId          = signal('');
   filterEstado      = signal('');
   filterPrioridad   = signal('');
   filterTaller      = signal('');
+  filterSucursal    = signal('');
   filterFechaInicio = signal('');
   filterFechaFin    = signal('');
   pageSize          = signal(10);
@@ -357,10 +484,23 @@ export class GlobalMonitorComponent {
   incidentsQuery = injectQuery(() => ({
     queryKey: ['global-incidents'],
     queryFn:  () => lastValueFrom(this.emergenciesService.getAllIncidents()),
-    // Ya no necesitamos refetchInterval porque escuchamos Push
   }));
 
   constructor() {
+    if (this.isOwner()) {
+      this.workshopsService.getBranches().subscribe({
+        next: (res) => {
+          this.branches.set(res || []);
+        }
+      });
+    } else if (this.isAdminSucursal()) {
+      this.workshopsService.getMyBranch().subscribe({
+        next: (res) => {
+          if (res) this.myBranchName.set(res.nombre);
+        }
+      });
+    }
+
     // Escuchamos notificaciones push para refrescar los datos en tiempo real
     this.pushService.message$
       .pipe(takeUntilDestroyed())
@@ -371,13 +511,13 @@ export class GlobalMonitorComponent {
 
   // ── Stats calculadas ──────────────────────────────────────────────────────
   allData          = computed(() => (this.incidentsQuery.data()) ?? []);
-  totalCount       = computed(() => this.allData().length);
-  activeCount      = computed(() => this.allData().filter(i => ['EN_CAMINO','EN_PROGRESO'].includes(i.estado_incidente)).length);
-  highPriorityCount = computed(() => this.allData().filter(i => {
+  totalCount       = computed(() => this.filteredData().length);
+  activeCount      = computed(() => this.filteredData().filter(i => ['EN_CAMINO','EN_PROGRESO','EN_ATENCION','ASIGNADO','TECNICO_EN_SITIO','TECNICO_RECHAZADO'].includes(i.estado_incidente)).length);
+  highPriorityCount = computed(() => this.filteredData().filter(i => {
     const p = (i.prioridad_incidente || '').trim().toUpperCase();
     return p === 'ALTA' || p === 'CRITICA';
   }).length);
-  completedCount   = computed(() => this.allData().filter(i => i.estado_incidente === 'COMPLETADO').length);
+  completedCount   = computed(() => this.filteredData().filter(i => ['COMPLETADO','FINALIZADO'].includes(i.estado_incidente)).length);
 
   // ── Filtrado reactivo ─────────────────────────────────────────────────────
   filteredData = computed(() => {
@@ -402,6 +542,9 @@ export class GlobalMonitorComponent {
       const hasta = new Date(this.filterFechaFin() + 'T23:59:59').getTime();
       data = data.filter((i) => new Date(i.fecha_reporte || '').getTime() <= hasta);
     }
+    if (this.isOwner() && this.filterSucursal()) {
+      data = data.filter((i) => i.id_sucursal === this.filterSucursal());
+    }
 
     return data;
   });
@@ -424,6 +567,7 @@ export class GlobalMonitorComponent {
     this.filterEstado.set('');
     this.filterPrioridad.set('');
     this.filterTaller.set('');
+    this.filterSucursal.set('');
     this.filterFechaInicio.set('');
     this.filterFechaFin.set('');
     this.pageIndex.set(0);

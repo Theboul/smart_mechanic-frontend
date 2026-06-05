@@ -26,10 +26,23 @@ export interface StatusUpdate {
   nuevo_estado: string; // Ej: EN_CAMINO, EN_PROGRESO, COMPLETADO
 }
 
+export interface IncidentHistoryResponse {
+  id_historial: string;
+  id_incidente: string;
+  id_taller?: string | null;
+  id_sucursal?: string | null;
+  incidente_estado_anterior?: string | null;
+  incidente_estado_nuevo: string;
+  historial_actor?: string | null;
+  fecha: string;
+}
+
 export interface IncidentResponse {
   id_incidente: string;
   id_vehiculo: string;
   id_taller: string | null;
+  id_sucursal?: string | null;
+  branch_name?: string | null;
   id_tecnico?: string | null;
   workshop_name?: string | null;
   technician_name?: string | null;
@@ -45,6 +58,7 @@ export interface IncidentResponse {
   analisis_consolidado: string | null;
   fecha_reporte?: string;
   evidencias: EvidenceResponse[];
+  historial?: IncidentHistoryResponse[];
   
   // Nuevos campos
   client_name?: string | null;
@@ -54,12 +68,21 @@ export interface IncidentResponse {
   vehicle_plate?: string | null;
   vehicle_color?: string | null;
   vehicle_year?: number | null;
+  
+  verification_status?: string | null;
+  verification_code?: string | null;
+  monto_total?: number | null;
+  mano_de_obra?: number | null;
+  repuestos?: number | null;
+  observaciones?: string | null;
 }
 
 export interface IncidentDetailResponse {
   id_incidente: string;
   id_vehiculo: string;
   id_taller: string | null;
+  id_sucursal?: string | null;
+  branch_name?: string | null;
   descripcion: string | null;
   telefono: string | null;
   latitud?: number;
@@ -82,6 +105,8 @@ export interface TecnicoCreate {
 export interface TecnicoResponse {
   id_tecnico: string;
   id_taller: string;
+  id_sucursal?: string | null;
+  branch_name?: string | null;
   nombre: string;
   telefono: string;
   estado: boolean;

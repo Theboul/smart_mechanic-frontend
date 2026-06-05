@@ -7,13 +7,17 @@ import { lastValueFrom, Subscription } from 'rxjs';
 import { IncidentDetailsCard } from '../../components/incident-details-card/incident-details-card';
 import { EvidenceViewer } from '../../components/evidence-viewer/evidence-viewer';
 import { AiAnalysisPanel } from '../../components/ai-analysis-panel/ai-analysis-panel';
+import { IncidentTimeline } from '../../components/incident-timeline/incident-timeline';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PageHeaderComponent, LoadingStateComponent } from '@shared/ui';
 import { LucideAngularModule, Siren, Map as MapIcon, Compass } from 'lucide-angular';
 import { GoogleMapsModule } from '@angular/google-maps';
 import { environment } from '@env/environment';
 import { IncidentTrackingService, WebSocketMessage } from '@core/services/incident-tracking.service';
+import { FormsModule } from '@angular/forms';
+import { AuthStore } from '@features/identity/auth/state/auth.store';
 
 @Component({
   selector: 'app-incident-details-page',
@@ -23,12 +27,15 @@ import { IncidentTrackingService, WebSocketMessage } from '@core/services/incide
     IncidentDetailsCard, 
     EvidenceViewer, 
     AiAnalysisPanel,
+    IncidentTimeline,
     MatButtonModule,
     MatIconModule,
+    MatSnackBarModule,
     PageHeaderComponent,
     LoadingStateComponent,
     LucideAngularModule,
-    GoogleMapsModule
+    GoogleMapsModule,
+    FormsModule
   ],
   template: `
     <div class="page-container">
@@ -62,6 +69,55 @@ import { IncidentTrackingService, WebSocketMessage } from '@core/services/incide
           </div>
 
           <div class="side-column">
+            <!-- Verification Card (CU30) -->
+            @if (incidentQuery.data()?.verification_status) {
+              <div class="card verification-card">
+                <div class="card-header-premium">
+                  <mat-icon>verified_user</mat-icon>
+                  <span>Verificación de Técnico en Sitio</span>
+                </div>
+                <div class="verification-body">
+                  <div class="info-row">
+                    <span class="label">Estado de Verificación:</span>
+                    <span class="status-val" [attr.data-status]="incidentQuery.data()?.verification_status">
+                      {{ incidentQuery.data()?.verification_status }}
+                    </span>
+                  </div>
+                  
+                  @if (incidentQuery.data()?.verification_code) {
+                    <div class="info-row code-row">
+                      <span class="label">PIN de Seguridad:</span>
+                      <span class="pin-code">{{ incidentQuery.data()?.verification_code }}</span>
+                    </div>
+                  }
+                  
+                  @if (canOverride(incidentQuery.data())) {
+                    <div class="override-section">
+                      <p class="override-warn">⚠️ Usa esta opción únicamente si el cliente tiene problemas de conectividad para realizar la verificación desde su app móvil.</p>
+                      
+                      <div class="override-input-group">
+                        <textarea 
+                          placeholder="Escribe el motivo del override manual (Obligatorio)..." 
+                          [(ngModel)]="overrideReason"
+                          class="motive-textarea">
+                        </textarea>
+                        
+                        <button 
+                          mat-flat-button 
+                          color="warn" 
+                          class="override-btn"
+                          [disabled]="!overrideReason.trim() || isOverriding"
+                          (click)="performManualOverride()">
+                          <mat-icon>lock_open</mat-icon>
+                          Autorizar Override Manual
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+
             <!-- Google Maps Card -->
             <div class="card map-card">
               <div class="map-header">
@@ -70,7 +126,7 @@ import { IncidentTrackingService, WebSocketMessage } from '@core/services/incide
                   <span>Seguimiento de Asistencia</span>
                 </div>
                 
-                @if (etaMinutos !== null) {
+                @if (etaMinutos !== null && incidentQuery.data()!.id_sucursal) {
                   <span class="eta-badge">
                     <lucide-icon [img]="compassIcon" [size]="12" class="spin"></lucide-icon>
                     Llega en {{ etaMinutos }} min
@@ -79,43 +135,55 @@ import { IncidentTrackingService, WebSocketMessage } from '@core/services/incide
               </div>
               
               <div class="details-map-container">
-                @if (mapsLoaded) {
-                  <google-map 
-                    height="100%" 
-                    width="100%" 
-                    [center]="mapCenter" 
-                    [zoom]="mapZoom" 
-                    [options]="mapOptions">
-                    
-                    <!-- Marcador de la Emergencia -->
-                    <map-marker 
-                      [position]="mapCenter" 
-                      [options]="incidentMarkerOptions">
-                    </map-marker>
-
-                    <!-- Marcador del Técnico en ruta -->
-                    @if (techPosition) {
+                @if (incidentQuery.data()!.id_sucursal) {
+                  @if (mapsLoaded) {
+                    <google-map 
+                      height="100%" 
+                      width="100%" 
+                      [center]="mapCenter" 
+                      [zoom]="mapZoom" 
+                      [options]="mapOptions">
+                      
+                      <!-- Marcador de la Emergencia -->
                       <map-marker 
-                        [position]="techPosition" 
-                        [options]="techMarkerOptions">
+                        [position]="mapCenter" 
+                        [options]="incidentMarkerOptions">
                       </map-marker>
-                    }
 
-                    <!-- Polilínea del trayecto calculado por Google Directions -->
-                    @if (polylinePath.length > 0) {
-                      <map-polyline 
-                        [path]="polylinePath" 
-                        [options]="polylineOptions">
-                      </map-polyline>
-                    }
-                  </google-map>
+                      <!-- Marcador del Técnico en ruta -->
+                      @if (techPosition) {
+                        <map-marker 
+                          [position]="techPosition" 
+                          [options]="techMarkerOptions">
+                        </map-marker>
+                      }
+
+                      <!-- Polilínea del trayecto calculado por Google Directions -->
+                      @if (polylinePath.length > 0) {
+                        <map-polyline 
+                          [path]="polylinePath" 
+                          [options]="polylineOptions">
+                        </map-polyline>
+                      }
+                    </google-map>
+                  } @else {
+                    <div class="map-loading-placeholder">
+                      <mat-icon class="spin">cached</mat-icon>
+                      <span>Cargando Google Maps...</span>
+                    </div>
+                  }
                 } @else {
-                  <div class="map-loading-placeholder">
-                    <mat-icon class="spin">cached</mat-icon>
-                    <span>Cargando Google Maps...</span>
+                  <div class="map-disabled-placeholder">
+                    <mat-icon>location_off</mat-icon>
+                    <p>Seguimiento en tiempo real disponible cuando la emergencia sea asignada a una sucursal.</p>
                   </div>
                 }
               </div>
+            </div>
+
+            <!-- Timeline Card -->
+            <div class="card">
+              <app-incident-timeline [history]="incidentQuery.data()!.historial || []"></app-incident-timeline>
             </div>
 
             <div class="card">
@@ -202,6 +270,21 @@ import { IncidentTrackingService, WebSocketMessage } from '@core/services/incide
       overflow: hidden;
     }
 
+    .map-disabled-placeholder {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      text-align: center;
+      gap: 0.75rem;
+      color: var(--sm-color-text-soft);
+      background: rgba(255, 255, 255, 0.02);
+      mat-icon { font-size: 32px; width: 32px; height: 32px; color: var(--sm-color-amber-500); }
+      p { font-size: 0.85rem; line-height: 1.4; margin: 0; max-width: 280px; }
+    }
+
     .map-loading-placeholder {
       height: 100%;
       display: flex;
@@ -232,6 +315,131 @@ import { IncidentTrackingService, WebSocketMessage } from '@core/services/incide
       from { transform: rotate(0deg); }
       to { transform: rotate(360deg); }
     }
+
+    /* Verification Card Styles */
+    .verification-card {
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .card-header-premium {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--sm-color-sapphire-400);
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 0.75rem;
+      mat-icon {
+        color: var(--sm-color-sapphire-400);
+      }
+    }
+
+    .verification-body {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      .label {
+        color: var(--sm-color-text-muted);
+      }
+      .status-val {
+        font-weight: 700;
+        padding: 0.2rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        &[data-status="VERIFICADO"] {
+          background: rgba(46, 204, 113, 0.15);
+          color: #2ecc71;
+        }
+        &[data-status="PENDIENTE"] {
+          background: rgba(241, 196, 15, 0.15);
+          color: #f1c40f;
+        }
+        &[data-status="BLOQUEADO"] {
+          background: rgba(231, 76, 60, 0.15);
+          color: #e74c3c;
+        }
+        &[data-status="RECHAZADO_ERROR"] {
+          background: rgba(231, 76, 60, 0.15);
+          color: #e74c3c;
+        }
+      }
+    }
+
+    .code-row {
+      background: rgba(255, 255, 255, 0.02);
+      padding: 0.5rem 0.75rem;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .pin-code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--sm-color-sapphire-300);
+    }
+
+    .override-section {
+      margin-top: 0.5rem;
+      padding: 0.75rem;
+      background: rgba(231, 76, 60, 0.05);
+      border-radius: 8px;
+      border: 1px solid rgba(231, 76, 60, 0.15);
+    }
+
+    .override-warn {
+      font-size: 0.75rem;
+      color: #e74c3c;
+      line-height: 1.3;
+      margin: 0 0 0.75rem 0;
+    }
+
+    .override-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .motive-textarea {
+      width: 100%;
+      height: 60px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 0.5rem;
+      color: white;
+      font-size: 0.8rem;
+      resize: none;
+      outline: none;
+      box-sizing: border-box;
+      &:focus {
+        border-color: rgba(231, 76, 60, 0.4);
+      }
+    }
+
+    .override-btn {
+      width: 100%;
+      height: 38px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
   `]
 })
 export class IncidentDetails implements OnDestroy {
@@ -240,6 +448,46 @@ export class IncidentDetails implements OnDestroy {
   private trackingService = inject(IncidentTrackingService);
   private location = inject(Location);
   private platformId = inject(PLATFORM_ID);
+  private snackBar = inject(MatSnackBar);
+  private authStore = inject(AuthStore);
+
+  overrideReason = '';
+  isOverriding = false;
+
+  canOverride(incident: any): boolean {
+    if (!incident) return false;
+    const user = this.authStore.user();
+    if (!user) return false;
+    
+    const status = (incident.estado_incidente || '').toUpperCase();
+    if (status !== 'TECNICO_EN_SITIO' && status !== 'TECNICO_RECHAZADO') {
+      return false;
+    }
+    
+    return user.rol_nombre === 'superadmin' || user.rol_nombre === 'admin_taller';
+  }
+
+  async performManualOverride() {
+    if (!this.overrideReason.trim()) return;
+    this.isOverriding = true;
+    try {
+      await lastValueFrom(this.emergenciesService.overrideVerification(this.incidentId, this.overrideReason));
+      this.snackBar.open('Manual override aplicado con éxito. Servicio iniciado.', 'Ok', {
+        duration: 5000,
+        horizontalPosition: 'end',
+        verticalPosition: 'top'
+      });
+      this.overrideReason = '';
+      this.incidentQuery.refetch();
+    } catch (err: any) {
+      console.error(err);
+      this.snackBar.open(`Error al aplicar override: ${err?.error?.detail || err?.message || 'Error desconocido'}`, 'Cerrar', {
+        duration: 5000
+      });
+    } finally {
+      this.isOverriding = false;
+    }
+  }
 
   incidentId = this.route.snapshot.paramMap.get('id') || '';
   mapsLoaded = false;
@@ -322,12 +570,16 @@ export class IncidentDetails implements OnDestroy {
     // Iniciar carga del script de mapas y conexión de sockets cuando se cargue el incidente
     effect(() => {
       const data = this.incidentQuery.data();
-      if (data && data.latitud && data.longitud && isPlatformBrowser(this.platformId)) {
-        this.mapCenter = { lat: data.latitud, lng: data.longitud };
-        this.loadGoogleMapsScript().then(() => {
-          this.mapsLoaded = true;
-          this.subscribeToTracking(data.estado_incidente);
-        });
+      if (data && isPlatformBrowser(this.platformId)) {
+        if (data.latitud && data.longitud) {
+          this.mapCenter = { lat: data.latitud, lng: data.longitud };
+          this.loadGoogleMapsScript().then(() => {
+            this.mapsLoaded = true;
+          });
+        }
+        
+        // Manejar la conexión al WebSocket de seguimiento (scoping por sucursal)
+        this.manageTrackingSubscription(data.estado_incidente, data.id_sucursal);
       }
     });
   }
@@ -356,19 +608,29 @@ export class IncidentDetails implements OnDestroy {
     });
   }
 
-  private subscribeToTracking(status: string) {
-    // Solo suscribirse a tracking en vivo si el estado del incidente está en progreso de atención
+  private manageTrackingSubscription(status: string, branchId?: string | null) {
     const activeStates = ['TALLER_ASIGNADO', 'EN_CAMINO', 'EN_ATENCION'];
-    if (activeStates.includes(status)) {
-      console.log(`🔌 Iniciando suscripción de tracking para incidente: ${this.incidentId}`);
-      this.trackingSubscription = this.trackingService.connect(this.incidentId).subscribe({
-        next: (message: WebSocketMessage) => {
-          this.handleWebsocketMessage(message);
-        },
-        error: (err) => {
-          console.error('Error en WebSocket de seguimiento:', err);
-        }
-      });
+    const shouldSubscribe = activeStates.includes(status.toUpperCase()) && !!branchId;
+
+    if (shouldSubscribe) {
+      if (!this.trackingSubscription) {
+        console.log(`🔌 Iniciando suscripción de tracking para incidente: ${this.incidentId} (Sucursal: ${branchId})`);
+        this.trackingSubscription = this.trackingService.connect(this.incidentId, branchId!).subscribe({
+          next: (message: WebSocketMessage) => {
+            this.handleWebsocketMessage(message);
+          },
+          error: (err) => {
+            console.error('Error en WebSocket de seguimiento:', err);
+          }
+        });
+      }
+    } else {
+      if (this.trackingSubscription) {
+        console.log(`🔌 Desconectando tracking (estado inactivo o sin sucursal: ${status})`);
+        this.trackingSubscription.unsubscribe();
+        this.trackingSubscription = undefined;
+        this.trackingService.disconnect();
+      }
     }
   }
 
@@ -401,9 +663,17 @@ export class IncidentDetails implements OnDestroy {
           console.error('Error al decodificar la polilínea de ruta:', e);
         }
       }
-    } else if (message.type === 'STATUS_UPDATE') {
+    } else if (message.type === 'STATUS_UPDATE' || message.type === 'STATUS_UPDATED') {
       console.log('🚨 Cambio de estado detectado por WebSocket. Refrescando datos...');
       this.incidentQuery.refetch();
+      if (message.data && message.data.estado_nuevo) {
+        const cleanState = message.data.estado_nuevo.replace(/_/g, ' ').toUpperCase();
+        this.snackBar.open(`🚨 ESTADO DE EMERGENCIA: ${cleanState}`, 'Ok', {
+          duration: 5000,
+          horizontalPosition: 'end',
+          verticalPosition: 'top'
+        });
+      }
     }
   }
 

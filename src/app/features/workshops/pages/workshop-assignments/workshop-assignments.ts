@@ -13,7 +13,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { FinanceService } from '@features/finance/data-access/finance.service';
-import { LucideAngularModule, ClipboardList, MapPin, Clock, CheckCircle, Search, Filter, RefreshCw, AlertTriangle, Eye, ChevronRight, User, CheckCircle2, UserCheck, Navigation, MessageSquare, Inbox, Wrench, Phone, Siren, Compass } from 'lucide-angular';
+import { LucideAngularModule, ClipboardList, MapPin, Clock, CheckCircle, Search, Filter, RefreshCw, AlertTriangle, Eye, ChevronRight, User, CheckCircle2, UserCheck, Navigation, MessageSquare, Inbox, Wrench, Phone, Siren, Compass, DollarSign } from 'lucide-angular';
 import { PageHeaderComponent, LoadingStateComponent } from '@shared/ui';
 import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model';
 
@@ -55,6 +55,10 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
         <div class="stat-card">
           <span class="stat-label">EN<br>REPARACIÓN</span>
           <span class="stat-value color-yellow">{{ statsEnReparacion() }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">ESPERANDO<br>PAGO</span>
+          <span class="stat-value color-orange">{{ statsEsperandoPago() }}</span>
         </div>
         <div class="stat-card">
           <span class="stat-label">COMPLETADOS<br>HOY</span>
@@ -228,7 +232,7 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
                   </div>
 
                   <div class="card-footer-actions" (click)="$event.stopPropagation()">
-                    <button mat-stroked-button color="primary" class="full-width-btn" (click)="onUpdateStatus(inc.id_incidente, 'EN_PROGRESO')">
+                    <button mat-stroked-button color="primary" class="full-width-btn" (click)="onUpdateStatus(inc.id_incidente, 'EN_ATENCION')">
                       CONFIRMAR LLEGADA
                     </button>
                   </div>
@@ -257,7 +261,9 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
                   <div class="card-header">
                     <div class="header-left">
                       <lucide-icon [img]="clockIcon" class="status-icon color-yellow"></lucide-icon>
-                      <span class="status-text color-yellow">En reparación</span>
+                      <span class="status-text color-yellow">
+                        {{ inc.estado_incidente === 'EN_ATENCION' ? 'En atención' : 'En reparación' }}
+                      </span>
                     </div>
                     <span class="card-time">{{ formatTime(inc.fecha_reporte) }}</span>
                   </div>
@@ -279,8 +285,8 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
                   </div>
 
                   <div class="card-footer-actions" (click)="$event.stopPropagation()">
-                    <button mat-flat-button color="accent" class="full-width-btn" (click)="onFinalizeService(inc.id_incidente)">
-                      FINALIZAR Y LIBERAR
+                    <button mat-flat-button color="primary" class="full-width-btn" (click)="onRegisterBilling(inc)">
+                      REGISTRAR COBRO
                     </button>
                   </div>
                 </div>
@@ -289,6 +295,65 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
                   <lucide-icon [img]="wrenchIcon" class="empty-icon"></lucide-icon>
                   <div class="empty-title">Sin trabajos</div>
                   <div class="empty-subtitle">activos en taller</div>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- COLUMNA: ESPERANDO PAGO -->
+          <div class="kanban-column col-esperando-pago">
+            <div class="column-header">
+              <span class="dot-indicator"></span>
+              <span class="column-title">Esperando Pago</span>
+              <span class="column-count" [class.has-items]="filteredWaitingPayment().length > 0">{{ filteredWaitingPayment().length }}</span>
+            </div>
+
+            <div class="column-body">
+              @for (inc of filteredWaitingPayment(); track inc.id_incidente) {
+                <div class="incident-card" (click)="onIncidentClick(inc.id_incidente)">
+                  <div class="card-header">
+                    <div class="header-left">
+                      <lucide-icon [img]="dollarIcon" class="status-icon color-orange"></lucide-icon>
+                      <span class="status-text color-orange">Esperando Pago</span>
+                    </div>
+                    <span class="card-time">{{ formatTime(inc.fecha_reporte) }}</span>
+                  </div>
+
+                  <div class="card-body">
+                    <p class="summary">{{ inc.resumen_ia || inc.descripcion }}</p>
+
+                    @if (inc.technician_name) {
+                      <div class="assigned-tech">
+                        <lucide-icon [img]="userIcon" [size]="12"></lucide-icon>
+                        <span>Técnico: {{ inc.technician_name }}</span>
+                      </div>
+                    }
+
+                    <div class="card-footer-info">
+                      <span class="category-tag">{{ getCategory(inc) }}</span>
+                      <span class="short-code">{{ getShortCode(inc, $index) }}</span>
+                    </div>
+                  </div>
+
+                  <div class="card-footer-actions" (click)="$event.stopPropagation()">
+                    @if (inc.monto_total) {
+                      <button mat-flat-button color="primary" class="full-width-btn mb-2" (click)="onRegisterBilling(inc)">
+                        VER / EDITAR COBRO
+                      </button>
+                      <button mat-flat-button color="accent" class="full-width-btn" (click)="onManualPayment(inc.id_incidente, inc.monto_total)">
+                        REGISTRAR PAGO MANUAL
+                      </button>
+                    } @else {
+                      <button mat-flat-button color="primary" class="full-width-btn" (click)="onRegisterBilling(inc)">
+                        REGISTRAR COBRO
+                      </button>
+                    }
+                  </div>
+                </div>
+              } @empty {
+                <div class="empty-column-state">
+                  <lucide-icon [img]="clockIcon" class="empty-icon"></lucide-icon>
+                  <div class="empty-title">Sin cobros pendientes</div>
                 </div>
               }
             </div>
@@ -349,7 +414,7 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
     /* Stats Bar */
     .stats-bar {
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(6, 1fr);
       gap: 1rem;
       width: 100%;
     }
@@ -377,6 +442,7 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
         &.color-red { color: #ff5b5b; }
         &.color-blue { color: #3b82f6; }
         &.color-yellow { color: #f1c40f; }
+        &.color-orange { color: #e67e22; }
         &.color-green { color: #2ecc71; }
       }
     }
@@ -464,7 +530,7 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
     /* Kanban Board Layout */
     .kanban-board {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 1.25rem;
       padding-bottom: 1.5rem;
     }
@@ -475,6 +541,7 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
       &.col-nuevas { border-top: 4px solid #ff5b5b; .dot-indicator { background: #ff5b5b; } }
       &.col-ruta { border-top: 4px solid #3b82f6; .dot-indicator { background: #3b82f6; } }
       &.col-reparacion { border-top: 4px solid #f1c40f; .dot-indicator { background: #f1c40f; } }
+      &.col-esperando-pago { border-top: 4px solid #e67e22; .dot-indicator { background: #e67e22; } }
       &.col-completados { border-top: 4px solid #2ecc71; .dot-indicator { background: #2ecc71; } }
     }
     .column-header {
@@ -658,12 +725,14 @@ import { IncidentResponse, TecnicoResponse } from '@core/models/workshops.model'
       .color-red { color: #ff5b5b; }
       .color-blue { color: #3b82f6; }
       .color-yellow { color: #f1c40f; }
+      .color-orange { color: #e67e22; }
       .color-green { color: #2ecc71; }
     }
 
     .col-nuevas .incident-card { border-left: 4px solid #ff5b5b; }
     .col-ruta .incident-card { border-left: 4px solid #3b82f6; }
     .col-reparacion .incident-card { border-left: 4px solid #f1c40f; }
+    .col-esperando-pago .incident-card { border-left: 4px solid #e67e22; }
     .col-completados .incident-card { border-left: 4px solid #2ecc71; }
 
     .category-tag {
@@ -727,6 +796,7 @@ export class WorkshopAssignments {
   protected readonly filterIcon = Filter;
   protected readonly clockIcon = Clock;
   protected readonly mapPinIcon = MapPin;
+  protected readonly dollarIcon = DollarSign;
 
   // Filtros (Signals para reactividad)
   searchQuery = signal('');
@@ -781,7 +851,15 @@ export class WorkshopAssignments {
   );
 
   filteredInProgress = computed(() => 
-    this.applyBaseFilters(this.assignmentsQuery.data() || []).filter(i => i.estado_incidente === 'EN_PROGRESO')
+    this.applyBaseFilters(this.assignmentsQuery.data() || []).filter(i => 
+      ['EN_PROGRESO', 'EN_ATENCION'].includes(i.estado_incidente)
+    )
+  );
+
+  filteredWaitingPayment = computed(() => 
+    this.applyBaseFilters(this.assignmentsQuery.data() || []).filter(i => 
+      ['FINALIZADO'].includes(i.estado_incidente)
+    )
   );
 
   filteredCompleted = computed(() => 
@@ -789,7 +867,7 @@ export class WorkshopAssignments {
   );
 
   totalActivos = computed(() => 
-    this.filteredEnCamino().length + this.filteredInProgress().length
+    this.filteredEnCamino().length + this.filteredInProgress().length + this.filteredWaitingPayment().length
   );
 
   // Stats calculados para las tarjetas superiores (NUEVO)
@@ -806,7 +884,15 @@ export class WorkshopAssignments {
   );
 
   statsEnReparacion = computed(() => 
-    (this.assignmentsQuery.data() || []).filter(i => i.estado_incidente === 'EN_PROGRESO').length
+    (this.assignmentsQuery.data() || []).filter(i => 
+      ['EN_PROGRESO', 'EN_ATENCION'].includes(i.estado_incidente)
+    ).length
+  );
+
+  statsEsperandoPago = computed(() => 
+    (this.assignmentsQuery.data() || []).filter(i => 
+      ['FINALIZADO'].includes(i.estado_incidente)
+    ).length
   );
 
   statsCompletadosHoy = computed(() => 
@@ -817,8 +903,9 @@ export class WorkshopAssignments {
     const newCount = this.statsSolicitudesNuevas();
     const routeCount = this.statsTecnicosEnRuta();
     const progressCount = this.statsEnReparacion();
+    const waitingCount = this.statsEsperandoPago();
     const completedCount = this.statsCompletadosHoy();
-    const total = newCount + routeCount + progressCount + completedCount;
+    const total = newCount + routeCount + progressCount + waitingCount + completedCount;
     if (total === 0) return 100;
     return Math.round((completedCount / total) * 100);
   });
@@ -910,6 +997,16 @@ export class WorkshopAssignments {
     }
   }));
 
+  billingMutation = injectMutation(() => ({
+    mutationFn: (data: { id: string, billing: any }) => 
+      lastValueFrom(this.financeService.registerBilling(data.id, data.billing)),
+    onSuccess: () => {
+      this.queryClient.invalidateQueries({ queryKey: ['assignments'] });
+      this.queryClient.invalidateQueries({ queryKey: ['technicians'] });
+      this.snackBar.open('✅ Cobro registrado correctamente', 'OK', { duration: 3500 });
+    }
+  }));
+
   onAccept(id: string, techId: string) {
     this.acceptMutation.mutate({ id, techId });
   }
@@ -924,17 +1021,31 @@ export class WorkshopAssignments {
     this.statusMutation.mutate({ id, status });
   }
 
-  async onFinalizeService(id: string) {
+  async onRegisterBilling(inc: IncidentResponse) {
     const { ProcessPaymentDialog } = await import('@features/finance/dialogs/process-payment-dialog.component');
     const dialogRef = this.dialog.open(ProcessPaymentDialog, {
-      data: { incidentId: id },
-      width: '400px',
+      data: { 
+        incidentId: inc.id_incidente,
+        mano_de_obra: inc.mano_de_obra,
+        repuestos: inc.repuestos,
+        observaciones: inc.observaciones
+      },
+      width: '450px',
       disableClose: true
     });
 
     const result = await lastValueFrom(dialogRef.afterClosed());
     if (result) {
-      this.paymentMutation.mutate({ id, amount: result });
+      this.billingMutation.mutate({ 
+        id: inc.id_incidente, 
+        billing: result 
+      });
+    }
+  }
+
+  onManualPayment(id: string, amount: number) {
+    if (confirm(`¿Está seguro de confirmar el PAGO MANUAL en efectivo por un monto de Bs. ${amount}?`)) {
+      this.paymentMutation.mutate({ id, amount });
     }
   }
 }

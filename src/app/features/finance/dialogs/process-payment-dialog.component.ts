@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -25,24 +25,41 @@ import { LucideAngularModule, DollarSign, Calculator, Info } from 'lucide-angula
         <div class="icon-box">
           <lucide-icon [img]="calcIcon" [size]="20"></lucide-icon>
         </div>
-        <h2>Finalizar y Liquidar Servicio</h2>
+        <h2>Registrar Cobro de Servicio</h2>
       </header>
 
       <div class="dialog-content">
-        <p class="instruction">Ingresa el monto total cobrado al cliente por este servicio de auxilio mecánico.</p>
+        <p class="instruction">Especifica los costos detallados del servicio de auxilio mecánico.</p>
         
         <div class="incident-info">
           <span class="label">Incidente:</span>
           <span class="value">#{{ data.incidentId.substring(0,8) }}</span>
         </div>
 
-        <mat-form-field appearance="outline" class="amount-field">
-          <mat-label>Monto Total (BOB)</mat-label>
-          <input matInput type="number" [(ngModel)]="monto" placeholder="0.00" min="1" autofocus />
-          <span matPrefix class="currency-prefix">Bs. &nbsp;</span>
+        <div class="fields-grid">
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Mano de Obra (BOB)</mat-label>
+            <input matInput type="number" [(ngModel)]="mano_de_obra" placeholder="0.00" min="0" autofocus />
+            <span matPrefix class="currency-prefix">Bs. &nbsp;</span>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="form-field">
+            <mat-label>Repuestos / Materiales (BOB)</mat-label>
+            <input matInput type="number" [(ngModel)]="repuestos" placeholder="0.00" min="0" />
+            <span matPrefix class="currency-prefix">Bs. &nbsp;</span>
+          </mat-form-field>
+        </div>
+
+        <mat-form-field appearance="outline" class="full-width-field">
+          <mat-label>Observaciones / Diagnóstico</mat-label>
+          <textarea matInput [(ngModel)]="observaciones" placeholder="Escribe observaciones o el diagnóstico del servicio..." rows="3"></textarea>
         </mat-form-field>
 
         <div class="commission-preview" *ngIf="monto > 0">
+          <div class="row">
+            <span>Monto Total Cobrado</span>
+            <span class="val">{{ monto | currency:'BOB':'symbol':'1.2-2' }}</span>
+          </div>
           <div class="row">
             <span>Comisión Plataforma (10%)</span>
             <span class="val">- {{ (monto * 0.1) | currency:'BOB':'symbol':'1.2-2' }}</span>
@@ -55,7 +72,7 @@ import { LucideAngularModule, DollarSign, Calculator, Info } from 'lucide-angula
 
         <div class="alert-box">
           <lucide-icon [img]="infoIcon" [size]="14"></lucide-icon>
-          <p>Al procesar el pago, el incidente se marcará como <b>FINALIZADO</b> y el técnico quedará disponible.</p>
+          <p>Al registrar el cobro, el cliente podrá ver el resumen en su app y pagar usando Stripe.</p>
         </div>
       </div>
 
@@ -63,13 +80,13 @@ import { LucideAngularModule, DollarSign, Calculator, Info } from 'lucide-angula
         <button mat-button (click)="onCancel()">CANCELAR</button>
         <button mat-flat-button color="primary" [disabled]="monto <= 0" (click)="onConfirm()">
           <lucide-icon [img]="dollarIcon" [size]="16"></lucide-icon>
-          PROCESAR PAGO
+          GUARDAR COBRO
         </button>
       </div>
     </div>
   `,
   styles: [`
-    .dialog-container { padding: 1.5rem; max-width: 400px; background: #0f172a; color: white; }
+    .dialog-container { padding: 1.5rem; max-width: 450px; background: #0f172a; color: white; }
     .dialog-header {
       display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.5rem;
       .icon-box { background: rgba(var(--sm-rgb-sapphire-400), 0.1); color: var(--sm-color-sapphire-400); padding: 0.5rem; border-radius: 8px; }
@@ -80,7 +97,9 @@ import { LucideAngularModule, DollarSign, Calculator, Info } from 'lucide-angula
     
     .incident-info { margin-bottom: 1.5rem; font-size: 0.8rem; .label { color: var(--sm-color-text-muted); margin-right: 0.5rem; } .value { font-weight: 700; color: var(--sm-color-sapphire-400); } }
 
-    .amount-field { width: 100%; }
+    .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .form-field { width: 100%; }
+    .full-width-field { width: 100%; margin-top: 0.5rem; }
     .currency-prefix { color: var(--sm-color-text-muted); font-weight: 600; }
 
     .commission-preview {
@@ -102,21 +121,45 @@ import { LucideAngularModule, DollarSign, Calculator, Info } from 'lucide-angula
     }
   `]
 })
-export class ProcessPaymentDialog {
+export class ProcessPaymentDialog implements OnInit {
   private dialogRef = inject(MatDialogRef<ProcessPaymentDialog>);
-  public data = inject(MAT_DIALOG_DATA);
+  public data = inject<{
+    incidentId: string;
+    mano_de_obra?: number;
+    repuestos?: number;
+    observaciones?: string;
+  }>(MAT_DIALOG_DATA);
 
   protected readonly calcIcon = Calculator;
   protected readonly dollarIcon = DollarSign;
   protected readonly infoIcon = Info;
 
-  monto: number = 0;
+  mano_de_obra: number = 0;
+  repuestos: number = 0;
+  observaciones: string = '';
+
+  ngOnInit() {
+    if (this.data) {
+      this.mano_de_obra = this.data.mano_de_obra || 0;
+      this.repuestos = this.data.repuestos || 0;
+      this.observaciones = this.data.observaciones || '';
+    }
+  }
+
+  get monto(): number {
+    return (this.mano_de_obra || 0) + (this.repuestos || 0);
+  }
 
   onCancel() {
     this.dialogRef.close();
   }
 
   onConfirm() {
-    this.dialogRef.close(this.monto);
+    this.dialogRef.close({
+      monto_total: this.monto,
+      mano_de_obra: this.mano_de_obra,
+      repuestos: this.repuestos,
+      observaciones: this.observaciones
+    });
   }
 }

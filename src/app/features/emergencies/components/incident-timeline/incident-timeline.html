@@ -1,0 +1,54 @@
+<div class="timeline-container">
+  <div class="timeline-header">
+    <lucide-icon [img]="clockIcon" [size]="16"></lucide-icon>
+    <span>Línea de Tiempo del Servicio</span>
+  </div>
+
+  @if (sortedHistory.length === 0) {
+    <div class="timeline-empty">
+      <mat-icon>history</mat-icon>
+      <p>No se registran transiciones de estado para este incidente.</p>
+    </div>
+  } @else {
+    <div class="timeline-list">
+      @for (item of sortedHistory; track item.id_historial; let last = $last) {
+        <div class="timeline-item">
+          <!-- Conexión vertical -->
+          @if (!last) {
+            <div class="timeline-line"></div>
+          }
+
+          <!-- Círculo e Icono del Estado -->
+          <div class="timeline-icon-container" [ngClass]="getStatusClass(item.incidente_estado_nuevo)">
+            <mat-icon class="timeline-icon">{{ getStatusIcon(item.incidente_estado_nuevo) }}</mat-icon>
+          </div>
+
+          <!-- Tarjeta de Contenido -->
+          <div class="timeline-content">
+            <div class="timeline-meta">
+              <span class="state-badge" [ngClass]="getStatusClass(item.incidente_estado_nuevo)">
+                {{ getStatusDisplay(item.incidente_estado_nuevo) }}
+              </span>
+              <span class="time-stamp">
+                {{ item.fecha | date:'shortTime' }}
+              </span>
+            </div>
+
+            <div class="state-transition" *ngIf="item.incidente_estado_anterior">
+              Estado anterior: <span class="old-state">{{ getStatusDisplay(item.incidente_estado_anterior) }}</span>
+            </div>
+
+            <div class="actor-info" *ngIf="item.historial_actor">
+              <lucide-icon [img]="userIcon" [size]="11"></lucide-icon>
+              <span>Por: {{ item.historial_actor.replace('_', ' ') }}</span>
+            </div>
+            
+            <div class="date-stamp">
+              {{ item.fecha | date:'mediumDate' }}
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

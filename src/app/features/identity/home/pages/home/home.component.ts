@@ -73,7 +73,7 @@ export class HomeComponent {
 
   kpis = computed<HomeKpi[]>(() => {
     const data      = this.incidentsQuery.data() || [];
-    const active    = data.filter(i => ['EN_CAMINO', 'EN_PROGRESO'].includes(i.estado_incidente ?? '')).length;
+    const active    = data.filter(i => ['EN_CAMINO', 'EN_PROGRESO', 'EN_ATENCION', 'FINALIZADO'].includes(i.estado_incidente ?? '')).length;
     const completed = data.filter(i => i.estado_incidente === 'COMPLETADO').length;
 
     return [

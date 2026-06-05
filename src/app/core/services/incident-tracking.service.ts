@@ -19,7 +19,7 @@ export interface StatusData {
 }
 
 export interface WebSocketMessage {
-  type: 'TRACKING_UPDATE' | 'STATUS_UPDATE' | 'PING';
+  type: 'TRACKING_UPDATE' | 'STATUS_UPDATE' | 'STATUS_UPDATED' | 'PING';
   data: any;
 }
 
@@ -38,7 +38,7 @@ export class IncidentTrackingService {
   /**
    * Conecta al WebSocket de un incidente específico para recibir actualizaciones en tiempo real.
    */
-  connect(incidentId: string): Observable<WebSocketMessage> {
+  connect(incidentId: string, branchId?: string): Observable<WebSocketMessage> {
     if (!this.isBrowser) {
       return this.messageSubject.asObservable();
     }
@@ -60,7 +60,10 @@ export class IncidentTrackingService {
     const host = url.host;
     
     // Construir la URL del WS del incidente
-    const wsUrl = `${protocol}//${host}/api/v1/emergencies/ws/incidents/${incidentId}?token=${token || ''}`;
+    let wsUrl = `${protocol}//${host}/api/v1/emergencies/ws/incidents/${incidentId}?token=${token || ''}`;
+    if (branchId) {
+      wsUrl += `&id_sucursal=${branchId}`;
+    }
     console.log(`📡 Conectando al WebSocket de tracking: ${wsUrl}`);
 
     try {

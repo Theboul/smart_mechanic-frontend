@@ -21,6 +21,8 @@ export interface IncidentDetailResponse {
   id_incidente: string;
   id_vehiculo: string;
   id_taller: string | null;
+  id_sucursal?: string | null;
+  branch_name?: string | null;
   descripcion: string | null;
   telefono: string | null;
   estado_incidente: string;

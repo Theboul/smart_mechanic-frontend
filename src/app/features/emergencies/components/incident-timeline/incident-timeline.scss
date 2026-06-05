@@ -1,0 +1,198 @@
+.timeline-container {
+  padding: 1.25rem;
+  background: var(--sm-color-gunmetal-900);
+  border-radius: 12px;
+  color: var(--sm-color-text);
+}
+
+.timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--sm-color-sapphire-400);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 0.75rem;
+}
+
+.timeline-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  color: var(--sm-color-text-soft);
+  text-align: center;
+  
+  mat-icon {
+    font-size: 32px;
+    width: 32px;
+    height: 32px;
+    margin-bottom: 0.5rem;
+    opacity: 0.5;
+  }
+  
+  p {
+    font-size: 0.8rem;
+    margin: 0;
+  }
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.timeline-item {
+  position: relative;
+  display: flex;
+  gap: 1rem;
+}
+
+.timeline-line {
+  position: absolute;
+  left: 16px;
+  top: 32px;
+  bottom: -24px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.timeline-icon-container {
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--sm-color-gunmetal-900);
+  background: #374151;
+  color: #9ca3af;
+  
+  mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+  
+  /* Estados específicos */
+  &.status-pendiente, &.status-buscando-taller {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  
+  &.status-taller-asignado {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+  
+  &.status-en-camino {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border-color: rgba(16, 185, 129, 0.3);
+    animation: pulse-green 2s infinite;
+  }
+  
+  &.status-en-atencion {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    border-color: rgba(139, 92, 246, 0.3);
+  }
+  
+  &.status-finalizado, &.status-completado {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border-color: #10b981;
+  }
+  
+  &.status-cancelado {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+}
+
+.timeline-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+
+.timeline-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.state-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  
+  &.status-pendiente, &.status-buscando-taller { color: #f59e0b; }
+  &.status-taller-asignado { color: #3b82f6; }
+  &.status-en-camino { color: #10b981; }
+  &.status-en-atencion { color: #8b5cf6; }
+  &.status-finalizado, &.status-completado { color: #10b981; }
+  &.status-cancelado { color: #ef4444; }
+}
+
+.time-stamp {
+  font-size: 0.75rem;
+  color: var(--sm-color-text-soft);
+}
+
+.state-transition {
+  font-size: 0.75rem;
+  color: var(--sm-color-text-soft);
+  margin-top: 0.25rem;
+  
+  .old-state {
+    text-decoration: line-through;
+    opacity: 0.7;
+  }
+}
+
+.actor-info {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--sm-color-text-soft);
+  margin-top: 0.25rem;
+  
+  lucide-icon {
+    display: inline-flex;
+    opacity: 0.7;
+  }
+}
+
+.date-stamp {
+  align-self: flex-end;
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.15);
+  margin-top: 0.25rem;
+}
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+}

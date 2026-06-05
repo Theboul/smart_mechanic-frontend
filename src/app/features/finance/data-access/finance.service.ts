@@ -17,6 +17,13 @@ export interface PaymentCreate {
   monto_total: number;
 }
 
+export interface BillingCreate {
+  monto_total: number;
+  mano_de_obra?: number;
+  repuestos?: number;
+  observaciones?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -29,6 +36,13 @@ export class FinanceService {
    */
   processPayment(incidentId: string, data: PaymentCreate): Observable<PaymentResponse> {
     return this.http.post<PaymentResponse>(`${this.API_URL}/emergencies/${incidentId}/pay`, data);
+  }
+
+  /**
+   * Registra la facturación/precio final de un incidente.
+   */
+  registerBilling(incidentId: string, data: BillingCreate): Observable<PaymentResponse> {
+    return this.http.post<PaymentResponse>(`${this.API_URL}/emergencies/${incidentId}/billing`, data);
   }
 
   /**

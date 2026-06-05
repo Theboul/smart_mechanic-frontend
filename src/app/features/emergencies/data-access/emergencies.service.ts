@@ -27,4 +27,8 @@ export class EmergenciesService {
   getIncidentById(id: string): Observable<IncidentResponse> {
     return this.http.get<IncidentResponse>(`${this.API_URL}/${id}`);
   }
+
+  overrideVerification(id: string, motivo: string): Observable<IncidentResponse> {
+    return this.http.post<IncidentResponse>(`${this.API_URL}/${id}/override-verification`, { motivo });
+  }
 }
