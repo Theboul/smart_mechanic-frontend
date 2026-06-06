@@ -348,6 +348,7 @@ export class SidebarComponent {
     children: [
       { label: 'Visualizar solicitudes', path: '/workshops/assignments' },
       { label: 'Gestionar técnicos y disponibilidad', path: '/workshops/team' },
+      { label: 'Gestionar Citas', path: '/workshops/calendar' },
     ],
   };
 

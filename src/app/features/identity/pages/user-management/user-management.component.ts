@@ -703,10 +703,10 @@ export class UserManagementComponent {
   usersQuery = injectQuery(() => ({
     queryKey: ['users', this.selectedWorkshopId(), this.usersBranchFilter()],
     queryFn: () => lastValueFrom(
-      this.identityService.getUsers(
-        this.selectedWorkshopId() ?? undefined,
-        this.usersBranchFilter() || 'all'
-      )
+      this.identityService.getUsers({
+        tallerId: this.selectedWorkshopId() ?? undefined,
+        idSucursal: this.usersBranchFilter() || undefined,
+      })
     )
   }));
 

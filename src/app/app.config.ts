@@ -1,5 +1,7 @@
-import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
+import { ApplicationConfig, LOCALE_ID, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { registerLocaleData } from '@angular/common';
+import localeEsBo from '@angular/common/locales/es-BO';
 
 import { routes } from './app.routes';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
@@ -12,6 +14,8 @@ import { provideAngularQuery, QueryClient } from '@tanstack/angular-query-experi
 import { importProvidersFrom } from '@angular/core';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 
+registerLocaleData(localeEsBo);
+
 export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
@@ -23,6 +27,7 @@ export const appConfig: ApplicationConfig = {
     ),
     provideAnimationsAsync(),                 // Necesario para Angular Material
     provideAngularQuery(new QueryClient()),   // Necesario para TanStack Query
-    importProvidersFrom(MatSnackBarModule)    // Necesario para notificaciones Snackbar
+    importProvidersFrom(MatSnackBarModule),   // Necesario para notificaciones Snackbar
+    { provide: LOCALE_ID, useValue: 'es-BO' }
   ]
 };

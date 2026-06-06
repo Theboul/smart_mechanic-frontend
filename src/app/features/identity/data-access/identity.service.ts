@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { UserResponse } from '@core/models/identity.model';
+import { UserResponse, VehicleResponse } from '@core/models/identity.model';
 import { environment } from '@env/environment';
 
 @Injectable({
@@ -15,15 +15,22 @@ export class IdentityService {
    * Obtiene la lista de usuarios con filtros opcionales.
    * @param tallerId ID del taller para filtrar (opcional para SuperAdmin)
    */
-  getUsers(tallerId?: string, idSucursal?: string): Observable<UserResponse[]> {
+  getUsers(filters: { tallerId?: string; idSucursal?: string; role?: string } = {}): Observable<UserResponse[]> {
     let params = new HttpParams();
-    if (tallerId) {
-      params = params.set('id_taller', tallerId);
+    if (filters.tallerId) {
+      params = params.set('id_taller', filters.tallerId);
     }
-    if (idSucursal) {
-      params = params.set('id_sucursal', idSucursal);
+    if (filters.idSucursal) {
+      params = params.set('id_sucursal', filters.idSucursal);
+    }
+    if (filters.role) {
+      params = params.set('role', filters.role);
     }
     return this.http.get<UserResponse[]>(`${this.API_URL}/users`, { params });
+  }
+
+  getUserVehicles(userId: string): Observable<VehicleResponse[]> {
+    return this.http.get<VehicleResponse[]>(`${this.API_URL}/users/${userId}/vehicles`);
   }
 
   /**

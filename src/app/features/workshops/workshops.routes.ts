@@ -48,14 +48,7 @@ export const workshopsRoutes: Routes = [
       },
       {
         path: 'calendar',
-        data: {
-          placeholder: {
-            title: 'Calendario del Taller',
-            description: 'Citas y agenda de atenciones programadas',
-            icon: '📅',
-          },
-        },
-        loadComponent: loadPlaceholderRoutePageComponent,
+        loadComponent: () => import('./pages/calendar/calendar').then(m => m.CalendarPageComponent),
       },
       {
         path: 'availability',

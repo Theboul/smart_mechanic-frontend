@@ -16,6 +16,17 @@ export interface UserResponse {
   placas?: string[];
 }
 
+export interface VehicleResponse {
+  id_vehiculo: string;
+  id_usuario: string;
+  matricula: string;
+  marca: string;
+  modelo: string;
+  ano: number;
+  color?: string | null;
+  foto?: string | null;
+}
+
 export interface TokenSchema {
   access_token: string;
   token_type: string;
