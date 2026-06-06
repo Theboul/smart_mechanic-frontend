@@ -18,6 +18,7 @@ import {
   ClipboardList,
   Building2,
   BookOpen,
+  ReceiptText,
 } from 'lucide-angular';
 
 @Component({
@@ -138,17 +139,24 @@ export class HomeComponent {
 
     // AdminTaller
     return [
-      {
-        key:         'view-assignments',
-        label:       'Ver Solicitudes',
-        icon:        ClipboardList,
-        description: 'Ir al tablero Kanban de incidentes.',
-        route:       '/workshops/assignments',
-      },
-      {
-        key:         'manage-team',
-        label:       'Gestionar Equipo',
-        icon:        Users,
+        {
+          key:         'view-assignments',
+          label:       'Ver Solicitudes',
+          icon:        ClipboardList,
+          description: 'Ir al tablero Kanban de incidentes.',
+          route:       '/workshops/assignments',
+        },
+        {
+          key:         'quotations',
+          label:       'Cotizaciones',
+          icon:        ReceiptText,
+          description: 'Revisar solicitudes y respuestas del taller.',
+          route:       '/quotations',
+        },
+        {
+          key:         'manage-team',
+          label:       'Gestionar Equipo',
+          icon:        Users,
         description: 'Administrar técnicos y disponibilidad.',
         route:       '/workshops/team',
       },
