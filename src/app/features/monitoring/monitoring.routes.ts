@@ -20,6 +20,10 @@ export const monitoringRoutes: Routes = [
         loadComponent: () => import('./pages/command-center/command-center.page').then(m => m.CommandCenterPage),
       },
       {
+        path: 'sla-alerts',
+        loadComponent: () => import('./pages/sla-alerts/sla-alerts.page').then(m => m.SlaAlertsPage),
+      },
+      {
         path: 'workshops',
         loadComponent: () => import('./pages/workshop-management/workshop-management.page').then(m => m.WorkshopManagementPage),
       },
@@ -34,4 +38,3 @@ export const monitoringRoutes: Routes = [
     ],
   },
 ];
-

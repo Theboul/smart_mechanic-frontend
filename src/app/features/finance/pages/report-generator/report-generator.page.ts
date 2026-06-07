@@ -380,8 +380,9 @@ export class ReportGeneratorPage {
         }
       }
       else if (this.selectedType() === 'auditoria') {
-        const raw = await lastValueFrom(this.monitoringService.getAuditLogs());
-        const filtered = raw.filter(l => {
+        const raw = await lastValueFrom(this.monitoringService.getAuditLogs({ page: 1, page_size: 1000 }));
+        const items = raw.items || [];
+        const filtered = items.filter(l => {
           const d = new Date(l.fecha_hora);
           return d >= start && d <= end;
         });

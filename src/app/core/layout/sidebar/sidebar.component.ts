@@ -358,6 +358,7 @@ export class SidebarComponent {
     children: [
       { label: 'Monitor de Incidentes', path: '/emergencies/active' },
       { label: 'Consultar historial de servicios', path: '/monitoring/history' },
+      { label: 'Bitácora de auditoría', path: '/monitoring/audit' },
     ],
   };
 
