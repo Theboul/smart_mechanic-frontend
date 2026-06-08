@@ -32,6 +32,10 @@ export class GestionTenantsAislamientoService {
     return this.http.get<TallerTenant[]>(`${this.apiUrl}/talleres`);
   }
 
+  getTenantDetail(idTaller: string): Observable<TallerTenant> {
+    return this.http.get<TallerTenant>(`${this.apiUrl}/talleres/${idTaller}`);
+  }
+
   createTenant(data: TallerTenantCreate): Observable<TallerTenant> {
     return this.http.post<TallerTenant>(`${this.apiUrl}/talleres`, data);
   }

@@ -1,11 +1,12 @@
-/**
- * CU33: Gestión de tenants y aislamiento de información.
+﻿/**
+ * CU33: GestiÃ³n de tenants y aislamiento de informaciÃ³n.
  * Vista para SuperAdmin dentro de DashboardLayout.
  */
 
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -34,6 +35,7 @@ import {
 import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from '@shared/ui';
 import { AuthStore } from '@features/identity/auth/state/auth.store';
 import { GestionTenantsAislamientoService } from '../../services/gestion-tenants-aislamiento.service';
+import { WorkshopsService } from '@features/workshops/data-access/workshops.service';
 import {
   BitacoraTenant,
   IncidenteTenant,
@@ -43,6 +45,7 @@ import {
   TallerTenantCreate,
   UsuarioTenant,
 } from '../../admin.models';
+import { SucursalResponse } from '@core/models/workshops.model';
 
 interface TenantFormData extends TallerTenantCreate {
   latitud: number;
@@ -73,7 +76,7 @@ interface TenantFormData extends TallerTenantCreate {
     <div class="page-container">
       <app-page-header
         title="Tenants y aislamiento"
-        subtitle="CU33 para SuperAdmin: talleres, usuarios, técnicos, incidentes, métricas y bitácora por tenant."
+        subtitle="CU33 para SuperAdmin: talleres, usuarios, tÃ©cnicos, incidentes, mÃ©tricas y bitÃ¡cora por tenant."
         [icon]="buildingIcon"
       >
         <div actions class="header-actions">
@@ -92,7 +95,7 @@ interface TenantFormData extends TallerTenantCreate {
         <mat-card class="access-denied-card">
           <lucide-icon [img]="alertIcon" [size]="44" class="access-denied-icon"></lucide-icon>
           <h2>Acceso restringido</h2>
-          <p>Esta pantalla solo está disponible para SuperAdmin.</p>
+          <p>Esta pantalla solo estÃ¡ disponible para SuperAdmin.</p>
           <p>Rol actual: <strong>{{ authUser()?.rol_nombre || 'No autenticado' }}</strong></p>
         </mat-card>
       } @else {
@@ -116,7 +119,7 @@ interface TenantFormData extends TallerTenantCreate {
                   matInput
                   [ngModel]="searchTerm()"
                   (ngModelChange)="onSearchChange($event)"
-                  placeholder="Nombre, NIT, correo o teléfono"
+                  placeholder="Nombre, NIT, correo o telÃ©fono"
                 />
                 <lucide-icon matTextSuffix [img]="searchIcon" [size]="16"></lucide-icon>
               </mat-form-field>
@@ -142,43 +145,47 @@ interface TenantFormData extends TallerTenantCreate {
                 message="No hay talleres que coincidan con el filtro actual."
               ></app-empty-state>
             } @else {
-              <table mat-table [dataSource]="pagedTenants()" class="tenant-table">
-                <ng-container matColumnDef="nombre">
-                  <th mat-header-cell *matHeaderCellDef>Taller</th>
-                  <td mat-cell *matCellDef="let tenant">
-                    <div class="tenant-name">{{ tenant.nombre }}</div>
-                    <div class="tenant-subtitle">NIT: {{ tenant.nit }}</div>
-                  </td>
-                </ng-container>
+              <div class="tenant-table-wrapper">
+                <table mat-table [dataSource]="pagedTenants()" class="tenant-table">
+                  <ng-container matColumnDef="nombre">
+                    <th mat-header-cell *matHeaderCellDef>Taller</th>
+                    <td mat-cell *matCellDef="let tenant">
+                      <div class="tenant-name">{{ tenant.nombre }}</div>
+                      <div class="tenant-subtitle">NIT: {{ tenant.nit }}</div>
+                    </td>
+                  </ng-container>
 
-                <ng-container matColumnDef="contacto">
-                  <th mat-header-cell *matHeaderCellDef>Contacto</th>
-                  <td mat-cell *matCellDef="let tenant">
-                    <div>{{ tenant.email || 'Sin correo' }}</div>
-                    <div class="tenant-subtitle">{{ tenant.telefono || 'Sin teléfono' }}</div>
-                  </td>
-                </ng-container>
+                  <ng-container matColumnDef="contacto">
+                    <th mat-header-cell *matHeaderCellDef>Contacto</th>
+                    <td mat-cell *matCellDef="let tenant">
+                      <div class="tenant-contact-main">{{ tenant.email || 'Sin correo' }}</div>
+                      <div class="tenant-subtitle">{{ tenant.telefono || 'Sin teléfono' }}</div>
+                    </td>
+                  </ng-container>
 
-                <ng-container matColumnDef="estado">
-                  <th mat-header-cell *matHeaderCellDef>Estado</th>
-                  <td mat-cell *matCellDef="let tenant">
-                    <span class="status-pill" [class.active]="tenant.is_active">
-                      {{ tenant.is_active ? 'Activo' : 'Inactivo' }}
-                    </span>
-                  </td>
-                </ng-container>
+                  <ng-container matColumnDef="estado">
+                    <th mat-header-cell *matHeaderCellDef>Estado</th>
+                    <td mat-cell *matCellDef="let tenant">
+                      <span class="status-pill" [class.active]="tenant.is_active">
+                        {{ tenant.is_active ? 'Activo' : 'Inactivo' }}
+                      </span>
+                    </td>
+                  </ng-container>
 
-                <ng-container matColumnDef="acciones">
-                  <th mat-header-cell *matHeaderCellDef>Acciones</th>
-                  <td mat-cell *matCellDef="let tenant">
-                    <button mat-button color="primary" (click)="selectTenant(tenant)">Ver</button>
-                    <button mat-button (click)="openEditTenantForm(tenant)">Editar</button>
-                  </td>
-                </ng-container>
+                  <ng-container matColumnDef="acciones">
+                    <th mat-header-cell *matHeaderCellDef>Acciones</th>
+                    <td mat-cell *matCellDef="let tenant">
+                      <div class="tenant-actions">
+                        <button mat-button color="primary" (click)="selectTenant(tenant)">Ver</button>
+                        <button mat-button (click)="openEditTenantForm(tenant)">Editar</button>
+                      </div>
+                    </td>
+                  </ng-container>
 
-                <tr mat-header-row *matHeaderRowDef="tenantColumns"></tr>
-                <tr mat-row *matRowDef="let row; columns: tenantColumns;" class="table-row"></tr>
-              </table>
+                  <tr mat-header-row *matHeaderRowDef="tenantColumns"></tr>
+                  <tr mat-row *matRowDef="let row; columns: tenantColumns;" class="table-row"></tr>
+                </table>
+              </div>
 
               <mat-paginator
                 [length]="filteredTenants().length"
@@ -195,7 +202,7 @@ interface TenantFormData extends TallerTenantCreate {
               <app-empty-state
                 [icon]="usersIcon"
                 title="Selecciona un tenant"
-                message="Elige un taller de la lista para ver sus usuarios, técnicos, incidentes, métricas y bitácora."
+                message="Elige un taller de la lista para ver sus usuarios, tÃ©cnicos, incidentes, mÃ©tricas y bitÃ¡cora."
               ></app-empty-state>
             } @else {
               <div class="detail-header">
@@ -227,11 +234,11 @@ interface TenantFormData extends TallerTenantCreate {
                     <span class="summary-value">{{ selectedTenant()?.email || 'No registrado' }}</span>
                   </div>
                   <div>
-                    <span class="summary-label">Teléfono</span>
+                    <span class="summary-label">TelÃ©fono</span>
                     <span class="summary-value">{{ selectedTenant()?.telefono || 'No registrado' }}</span>
                   </div>
                   <div>
-                    <span class="summary-label">Dirección</span>
+                    <span class="summary-label">DirecciÃ³n</span>
                     <span class="summary-value">{{ selectedTenant()?.direccion || 'No registrada' }}</span>
                   </div>
                   <div>
@@ -243,7 +250,7 @@ interface TenantFormData extends TallerTenantCreate {
 
               @if (verificationResult()) {
                 <mat-card class="verification-card">
-                  <div class="card-title">Verificación de aislamiento</div>
+                  <div class="card-title">VerificaciÃ³n de aislamiento</div>
                   <pre>{{ verificationResult() | json }}</pre>
                 </mat-card>
               }
@@ -264,7 +271,7 @@ interface TenantFormData extends TallerTenantCreate {
                     } @else if (usersQuery.isError()) {
                       <div class="error-box">No se pudieron cargar los usuarios asociados.</div>
                     } @else if ((usersQuery.data() ?? []).length === 0) {
-                      <app-empty-state [icon]="usersIcon" title="Sin usuarios" message="Este taller aún no tiene usuarios asociados."></app-empty-state>
+                      <app-empty-state [icon]="usersIcon" title="Sin usuarios" message="Este taller aÃºn no tiene usuarios asociados."></app-empty-state>
                     } @else {
                       <table mat-table [dataSource]="usersQuery.data() ?? []" class="detail-table">
                         <ng-container matColumnDef="nombre">
@@ -296,22 +303,94 @@ interface TenantFormData extends TallerTenantCreate {
                   </div>
                 </mat-tab>
 
+                <mat-tab label="Sucursales">
+                  <div class="tab-content">
+                    <div class="tab-toolbar">
+                      <h4>Sucursales asociadas al taller</h4>
+                      <button mat-stroked-button color="primary" (click)="openBranchManager()">
+                        <lucide-icon [img]="buildingIcon" [size]="14"></lucide-icon>
+                        Ir a gestión
+                      </button>
+                    </div>
+
+                    @if (branchesQuery.isLoading()) {
+                      <app-loading-state message="Cargando sucursales..."></app-loading-state>
+                    } @else if (branchesQuery.isError()) {
+                      <div class="error-box">No se pudieron cargar las sucursales asociadas.</div>
+                    } @else if ((branchesQuery.data() ?? []).length === 0) {
+                      <app-empty-state
+                        [icon]="buildingIcon"
+                        title="Sin sucursales"
+                        message="Este taller aún no tiene sucursales registradas."
+                      ></app-empty-state>
+                    } @else {
+                      <table mat-table [dataSource]="branchesQuery.data() ?? []" class="detail-table">
+                        <ng-container matColumnDef="nombre">
+                          <th mat-header-cell *matHeaderCellDef>Nombre</th>
+                          <td mat-cell *matCellDef="let branch">
+                            <div class="tenant-name">{{ branch.nombre }}</div>
+                            <div class="tenant-subtitle">ID: {{ branch.id_sucursal }}</div>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="contacto">
+                          <th mat-header-cell *matHeaderCellDef>Contacto</th>
+                          <td mat-cell *matCellDef="let branch">
+                            <div>{{ branch.telefono || 'Sin teléfono' }}</div>
+                            <div class="tenant-subtitle">{{ branch.email || 'Sin correo' }}</div>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="direccion">
+                          <th mat-header-cell *matHeaderCellDef>Dirección</th>
+                          <td mat-cell *matCellDef="let branch">{{ branch.direccion || 'Sin dirección' }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="estado">
+                          <th mat-header-cell *matHeaderCellDef>Estado</th>
+                          <td mat-cell *matCellDef="let branch">
+                            <span class="status-pill" [class.active]="branch.estado">
+                              {{ branch.estado ? 'Activo' : 'Inactivo' }}
+                            </span>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="creacion">
+                          <th mat-header-cell *matHeaderCellDef>Creación</th>
+                          <td mat-cell *matCellDef="let branch">{{ branch.fecha_creacion || 'N/D' }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="acciones">
+                          <th mat-header-cell *matHeaderCellDef>Acciones</th>
+                          <td mat-cell *matCellDef="let branch">
+                            <button mat-button color="primary" (click)="openBranchManager(branch)">Ver</button>
+                            <button mat-button (click)="openBranchManager(branch)">Editar</button>
+                          </td>
+                        </ng-container>
+
+                        <tr mat-header-row *matHeaderRowDef="branchColumns"></tr>
+                        <tr mat-row *matRowDef="let row; columns: branchColumns;"></tr>
+                      </table>
+                    }
+                  </div>
+                </mat-tab>
+
                 <mat-tab label="Técnicos">
                   <div class="tab-content">
                     <div class="tab-toolbar">
-                      <h4>Técnicos asociados al tenant</h4>
+                      <h4>TÃ©cnicos asociados al tenant</h4>
                       <button mat-flat-button color="primary" (click)="openTechnicianAssociationForm()">
                         <lucide-icon [img]="plusIcon" [size]="14"></lucide-icon>
-                        Asociar técnico
+                        Asociar tÃ©cnico
                       </button>
                     </div>
 
                     @if (techniciansQuery.isLoading()) {
-                      <app-loading-state message="Cargando técnicos..."></app-loading-state>
+                      <app-loading-state message="Cargando tÃ©cnicos..."></app-loading-state>
                     } @else if (techniciansQuery.isError()) {
-                      <div class="error-box">No se pudieron cargar los técnicos asociados.</div>
+                      <div class="error-box">No se pudieron cargar los tÃ©cnicos asociados.</div>
                     } @else if ((techniciansQuery.data() ?? []).length === 0) {
-                      <app-empty-state [icon]="wrenchIcon" title="Sin técnicos" message="Este taller aún no tiene técnicos asociados."></app-empty-state>
+                      <app-empty-state [icon]="wrenchIcon" title="Sin tÃ©cnicos" message="Este taller aÃºn no tiene tÃ©cnicos asociados."></app-empty-state>
                     } @else {
                       <table mat-table [dataSource]="techniciansQuery.data() ?? []" class="detail-table">
                         <ng-container matColumnDef="nombre">
@@ -325,7 +404,7 @@ interface TenantFormData extends TallerTenantCreate {
                         </ng-container>
 
                         <ng-container matColumnDef="telefono">
-                          <th mat-header-cell *matHeaderCellDef>Teléfono</th>
+                          <th mat-header-cell *matHeaderCellDef>TelÃ©fono</th>
                           <td mat-cell *matCellDef="let tech">{{ tech.telefono || 'No registrado' }}</td>
                         </ng-container>
 
@@ -345,24 +424,42 @@ interface TenantFormData extends TallerTenantCreate {
 
                 <mat-tab label="Incidentes">
                   <div class="tab-content">
-                    <h4>Incidentes filtrados por tenant</h4>
+                    <div class="tab-toolbar">
+                      <h4>Últimos incidentes recientes</h4>
+                    </div>
 
                     @if (incidentsQuery.isLoading()) {
                       <app-loading-state message="Cargando incidentes..."></app-loading-state>
                     } @else if (incidentsQuery.isError()) {
                       <div class="error-box">No se pudieron cargar los incidentes del tenant.</div>
-                    } @else if ((incidentsQuery.data() ?? []).length === 0) {
-                      <app-empty-state title="Sin incidentes" message="No hay incidentes registrados para este taller."></app-empty-state>
+                    } @else if (recentIncidents().length === 0) {
+                      <app-empty-state title="Sin incidentes" message="Este taller aún no tiene incidentes registrados."></app-empty-state>
                     } @else {
-                      <table mat-table [dataSource]="incidentsQuery.data() ?? []" class="detail-table">
-                        <ng-container matColumnDef="id_incidente">
-                          <th mat-header-cell *matHeaderCellDef>ID</th>
-                          <td mat-cell *matCellDef="let incident">{{ incident.id_incidente }}</td>
+                      <table mat-table [dataSource]="recentIncidents()" class="detail-table">
+                        <ng-container matColumnDef="fecha_reporte">
+                          <th mat-header-cell *matHeaderCellDef>Fecha reporte</th>
+                          <td mat-cell *matCellDef="let incident">{{ incident.fecha_reporte || 'N/D' }}</td>
                         </ng-container>
 
-                        <ng-container matColumnDef="estado">
-                          <th mat-header-cell *matHeaderCellDef>Estado</th>
-                          <td mat-cell *matCellDef="let incident">{{ incident.estado_incidente }}</td>
+                        <ng-container matColumnDef="cliente">
+                          <th mat-header-cell *matHeaderCellDef>Cliente</th>
+                          <td mat-cell *matCellDef="let incident">
+                            <div class="tenant-name">{{ incident.client_name || 'Sin nombre' }}</div>
+                            <div class="tenant-subtitle">{{ incident.client_phone || incident.telefono || 'Sin teléfono' }}</div>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="vehiculo">
+                          <th mat-header-cell *matHeaderCellDef>Vehículo / Matrícula</th>
+                          <td mat-cell *matCellDef="let incident">
+                            <div class="tenant-name">{{ getVehicleLabel(incident) }}</div>
+                            <div class="tenant-subtitle">{{ incident.vehicle_plate || 'Sin matrícula' }}</div>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="tecnico">
+                          <th mat-header-cell *matHeaderCellDef>Técnico</th>
+                          <td mat-cell *matCellDef="let incident">{{ incident.technician_name || 'Sin técnico' }}</td>
                         </ng-container>
 
                         <ng-container matColumnDef="prioridad">
@@ -370,9 +467,25 @@ interface TenantFormData extends TallerTenantCreate {
                           <td mat-cell *matCellDef="let incident">{{ incident.prioridad_incidente || 'N/D' }}</td>
                         </ng-container>
 
-                        <ng-container matColumnDef="fecha">
-                          <th mat-header-cell *matHeaderCellDef>Fecha</th>
-                          <td mat-cell *matCellDef="let incident">{{ incident.fecha_reporte || 'N/D' }}</td>
+                        <ng-container matColumnDef="estado">
+                          <th mat-header-cell *matHeaderCellDef>Estado</th>
+                          <td mat-cell *matCellDef="let incident">
+                            <span class="status-pill" [class.active]="isIncidentClosed(incident.estado_incidente)">
+                              {{ incident.estado_incidente }}
+                            </span>
+                          </td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="sucursal">
+                          <th mat-header-cell *matHeaderCellDef>Sucursal</th>
+                          <td mat-cell *matCellDef="let incident">{{ incident.branch_name || incident.id_sucursal || 'Sin sucursal' }}</td>
+                        </ng-container>
+
+                        <ng-container matColumnDef="acciones">
+                          <th mat-header-cell *matHeaderCellDef>Acción</th>
+                          <td mat-cell *matCellDef="let incident">
+                            <button mat-button color="primary" (click)="openIncidentDetail(incident.id_incidente)">Ver detalle</button>
+                          </td>
                         </ng-container>
 
                         <tr mat-header-row *matHeaderRowDef="incidentColumns"></tr>
@@ -382,14 +495,14 @@ interface TenantFormData extends TallerTenantCreate {
                   </div>
                 </mat-tab>
 
-                <mat-tab label="Métricas">
+                <mat-tab label="MÃ©tricas">
                   <div class="tab-content">
-                    <h4>Métricas básicas del tenant</h4>
+                    <h4>MÃ©tricas bÃ¡sicas del tenant</h4>
 
                     @if (metricsQuery.isLoading()) {
-                      <app-loading-state message="Cargando métricas..."></app-loading-state>
+                      <app-loading-state message="Cargando mÃ©tricas..."></app-loading-state>
                     } @else if (metricsQuery.isError()) {
-                      <div class="error-box">No se pudieron cargar las métricas del tenant.</div>
+                      <div class="error-box">No se pudieron cargar las mÃ©tricas del tenant.</div>
                     } @else {
                       <div class="metrics-grid">
                         <mat-card class="metric-card">
@@ -401,7 +514,7 @@ interface TenantFormData extends TallerTenantCreate {
                           <span class="metric-value">{{ tenantMetrics().incidentes_abiertos }}</span>
                         </mat-card>
                         <mat-card class="metric-card">
-                          <span class="metric-label">Total técnicos</span>
+                          <span class="metric-label">Total tÃ©cnicos</span>
                           <span class="metric-value">{{ tenantMetrics().total_tecnicos }}</span>
                         </mat-card>
                         <mat-card class="metric-card">
@@ -413,14 +526,14 @@ interface TenantFormData extends TallerTenantCreate {
                   </div>
                 </mat-tab>
 
-                <mat-tab label="Bitácora">
+                <mat-tab label="BitÃ¡cora">
                   <div class="tab-content">
-                    <h4>Bitácora filtrada por tenant</h4>
+                    <h4>BitÃ¡cora filtrada por tenant</h4>
 
                     @if (bitacoraQuery.isLoading()) {
-                      <app-loading-state message="Cargando bitácora..."></app-loading-state>
+                      <app-loading-state message="Cargando bitÃ¡cora..."></app-loading-state>
                     } @else if (bitacoraQuery.isError()) {
-                      <div class="error-box">No se pudo cargar la bitácora del tenant.</div>
+                      <div class="error-box">No se pudo cargar la bitÃ¡cora del tenant.</div>
                     } @else if ((bitacoraQuery.data() ?? []).length === 0) {
                       <app-empty-state title="Sin registros" message="No hay movimientos registrados para este taller."></app-empty-state>
                     } @else {
@@ -431,7 +544,7 @@ interface TenantFormData extends TallerTenantCreate {
                         </ng-container>
 
                         <ng-container matColumnDef="accion">
-                          <th mat-header-cell *matHeaderCellDef>Acción</th>
+                          <th mat-header-cell *matHeaderCellDef>AcciÃ³n</th>
                           <td mat-cell *matCellDef="let log">{{ log.accion }}</td>
                         </ng-container>
 
@@ -485,12 +598,12 @@ interface TenantFormData extends TallerTenantCreate {
             </mat-form-field>
 
             <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Teléfono</mat-label>
+              <mat-label>TelÃ©fono</mat-label>
               <input matInput [(ngModel)]="tenantFormData.telefono" />
             </mat-form-field>
 
             <mat-form-field appearance="outline" class="full-width">
-              <mat-label>Dirección</mat-label>
+              <mat-label>DirecciÃ³n</mat-label>
               <input matInput [(ngModel)]="tenantFormData.direccion" />
             </mat-form-field>
 
@@ -549,7 +662,7 @@ interface TenantFormData extends TallerTenantCreate {
       <div class="overlay" (click)="closeTechnicianAssociationForm()">
         <mat-card class="dialog" (click)="$event.stopPropagation()">
           <div class="dialog-header">
-            <h3>Asociar técnico existente</h3>
+            <h3>Asociar tÃ©cnico existente</h3>
             <button mat-icon-button (click)="closeTechnicianAssociationForm()">
               <lucide-icon [img]="closeIcon" [size]="20"></lucide-icon>
             </button>
@@ -557,15 +670,15 @@ interface TenantFormData extends TallerTenantCreate {
 
           <div class="dialog-body">
             <mat-form-field appearance="outline" class="full-width">
-              <mat-label>ID de técnico *</mat-label>
+              <mat-label>ID de tÃ©cnico *</mat-label>
               <input matInput [(ngModel)]="technicianAssociationData.id_tecnico" />
             </mat-form-field>
-            <p class="helper-text">Este flujo asocia un técnico ya existente al tenant seleccionado.</p>
+            <p class="helper-text">Este flujo asocia un tÃ©cnico ya existente al tenant seleccionado.</p>
           </div>
 
           <div class="dialog-actions">
             <button mat-flat-button color="primary" (click)="associateTechnician()" [disabled]="associateTechnicianMutation.isPending()">
-              {{ associateTechnicianMutation.isPending() ? 'Asociando...' : 'Asociar técnico' }}
+              {{ associateTechnicianMutation.isPending() ? 'Asociando...' : 'Asociar tÃ©cnico' }}
             </button>
             <button mat-button (click)="closeTechnicianAssociationForm()">Cancelar</button>
           </div>
@@ -611,7 +724,7 @@ interface TenantFormData extends TallerTenantCreate {
 
     .layout {
       display: grid;
-      grid-template-columns: minmax(340px, 460px) minmax(0, 1fr);
+      grid-template-columns: minmax(380px, 440px) minmax(0, 1fr);
       gap: 1.25rem;
       margin-top: 1.5rem;
     }
@@ -621,6 +734,8 @@ interface TenantFormData extends TallerTenantCreate {
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 18px;
       padding: 1.25rem;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .panel-header,
@@ -661,6 +776,43 @@ interface TenantFormData extends TallerTenantCreate {
       width: 100%;
     }
 
+    .tenant-table-wrapper {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+    }
+
+    .tenant-table {
+      width: 100%;
+      min-width: 560px;
+      table-layout: fixed;
+    }
+
+    .tenant-table th,
+    .tenant-table td {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: middle;
+    }
+
+    .tenant-table .mat-column-nombre {
+      width: 30%;
+    }
+
+    .tenant-table .mat-column-contacto {
+      width: 34%;
+    }
+
+    .tenant-table .mat-column-estado {
+      width: 18%;
+    }
+
+    .tenant-table .mat-column-acciones {
+      width: 18%;
+      text-align: right;
+    }
+
     .tenant-table th,
     .detail-table th {
       color: var(--sm-color-text-muted);
@@ -679,8 +831,35 @@ interface TenantFormData extends TallerTenantCreate {
       font-weight: 600;
     }
 
+    .tenant-name,
+    .tenant-contact-main,
+    .tenant-subtitle {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tenant-name,
+    .tenant-contact-main {
+      white-space: nowrap;
+    }
+
     .tenant-subtitle {
       font-size: 0.8rem;
+      word-break: break-word;
+    }
+
+    .tenant-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.25rem;
+    }
+
+    .tenant-actions button {
+      min-width: auto;
+      padding: 0 0.35rem;
+      line-height: 28px;
     }
 
     .status-pill {
@@ -729,6 +908,14 @@ interface TenantFormData extends TallerTenantCreate {
 
     .tab-content {
       padding-top: 1rem;
+    }
+
+    .detail-panel mat-tab-group {
+      margin-top: 0.75rem;
+    }
+
+    .detail-panel .detail-table {
+      margin-top: 0.5rem;
     }
 
     .tab-toolbar {
@@ -838,6 +1025,8 @@ interface TenantFormData extends TallerTenantCreate {
 export class TenantIsolationPage {
   private readonly authStore = inject(AuthStore);
   private readonly adminService = inject(GestionTenantsAislamientoService);
+  private readonly workshopsService = inject(WorkshopsService);
+  private readonly router = inject(Router);
   private readonly snackBar = inject(MatSnackBar);
 
   readonly buildingIcon = Building2;
@@ -875,8 +1064,9 @@ export class TenantIsolationPage {
 
   readonly tenantColumns = ['nombre', 'contacto', 'estado', 'acciones'];
   readonly userColumns = ['nombre', 'correo', 'rol', 'estado'];
+  readonly branchColumns = ['nombre', 'contacto', 'direccion', 'estado', 'creacion', 'acciones'];
   readonly technicianColumns = ['nombre', 'correo', 'telefono', 'estado'];
-  readonly incidentColumns = ['id_incidente', 'estado', 'prioridad', 'fecha'];
+  readonly incidentColumns = ['fecha_reporte', 'cliente', 'vehiculo', 'tecnico', 'prioridad', 'estado', 'sucursal', 'acciones'];
   readonly bitacoraColumns = ['fecha_hora', 'accion', 'nombre_usuario', 'descripcion'];
 
   readonly tenantsQuery = injectQuery(() => ({
@@ -890,6 +1080,17 @@ export class TenantIsolationPage {
       queryKey: ['admin', 'tenant-users', idTaller],
       enabled: computed(() => !!this.selectedTenant()?.id_taller),
       queryFn: () => idTaller ? lastValueFrom(this.adminService.getTenantUsers(idTaller)) : Promise.resolve([] as UsuarioTenant[]),
+    };
+  });
+
+  readonly branchesQuery = injectQuery(() => {
+    const idTaller = this.selectedTenant()?.id_taller;
+    return {
+      queryKey: ['admin', 'tenant-branches', idTaller],
+      enabled: computed(() => !!this.selectedTenant()?.id_taller),
+      queryFn: () => idTaller
+        ? lastValueFrom(this.workshopsService.getBranchesByWorkshop(idTaller))
+        : Promise.resolve([] as SucursalResponse[]),
     };
   });
 
@@ -983,13 +1184,13 @@ export class TenantIsolationPage {
     mutationFn: (payload: { idTaller: string; idTecnico: string }) =>
       lastValueFrom(this.adminService.associateTechnician(payload.idTaller, payload.idTecnico)),
     onSuccess: () => {
-      this.snackBar.open('Técnico asociado al taller.', 'Cerrar', { duration: 3000 });
+      this.snackBar.open('TÃ©cnico asociado al taller.', 'Cerrar', { duration: 3000 });
       this.closeTechnicianAssociationForm();
       this.techniciansQuery.refetch();
       this.bitacoraQuery.refetch();
     },
     onError: () => {
-      this.snackBar.open('No se pudo asociar el técnico.', 'Cerrar', { duration: 4000 });
+      this.snackBar.open('No se pudo asociar el tÃ©cnico.', 'Cerrar', { duration: 4000 });
     },
   }));
 
@@ -997,7 +1198,7 @@ export class TenantIsolationPage {
     mutationFn: () => lastValueFrom(this.adminService.verifyIsolation()),
     onSuccess: (result) => {
       this.verificationResult.set(result);
-      this.snackBar.open('Verificación de aislamiento completada.', 'Cerrar', { duration: 3000 });
+      this.snackBar.open('VerificaciÃ³n de aislamiento completada.', 'Cerrar', { duration: 3000 });
     },
     onError: () => {
       this.snackBar.open('No se pudo verificar el aislamiento.', 'Cerrar', { duration: 4000 });
@@ -1034,6 +1235,12 @@ export class TenantIsolationPage {
     return this.metricsQuery.data() ?? this.emptyMetrics();
   });
 
+  readonly recentIncidents = computed(() => {
+    return [...(this.incidentsQuery.data() ?? [])]
+      .sort((left, right) => this.parseIncidentDate(right.fecha_reporte) - this.parseIncidentDate(left.fecha_reporte))
+      .slice(0, 10);
+  });
+
   private createEmptyTenantForm(): TenantFormData {
     return {
       nombre: '',
@@ -1062,6 +1269,7 @@ export class TenantIsolationPage {
 
   private refreshDetailQueries(): void {
     this.usersQuery.refetch();
+    this.branchesQuery.refetch();
     this.techniciansQuery.refetch();
     this.incidentsQuery.refetch();
     this.metricsQuery.refetch();
@@ -1083,11 +1291,48 @@ export class TenantIsolationPage {
     this.pageSize.set(event.pageSize);
   }
 
-  selectTenant(tenant: TallerTenant): void {
-    this.selectedTenant.set(tenant);
+  async selectTenant(tenant: TallerTenant): Promise<void> {
     this.selectedTabIndex.set(0);
     this.verificationResult.set(null);
+
+    try {
+      const detail = await lastValueFrom(this.adminService.getTenantDetail(tenant.id_taller));
+      this.selectedTenant.set(detail);
+    } catch {
+      this.selectedTenant.set(tenant);
+    }
+
     this.refreshDetailQueries();
+  }
+
+  openBranchManager(branch?: SucursalResponse | null): void {
+    if (branch) {
+      this.selectedTabIndex.set(5);
+    }
+
+    void this.router.navigate(['/workshops/branches']);
+  }
+
+  openIncidentDetail(idIncidente: string): void {
+    void this.router.navigate(['/emergencies/details', idIncidente]);
+  }
+
+  getVehicleLabel(incident: IncidenteTenant): string {
+    const parts = [incident.vehicle_brand, incident.vehicle_model].filter(Boolean);
+    if (parts.length > 0) {
+      return parts.join(' ');
+    }
+    return incident.vehicle_plate || 'Vehículo sin detalle';
+  }
+
+  isIncidentClosed(status?: string | null): boolean {
+    const normalized = (status || '').toLowerCase();
+    return normalized.includes('complet') || normalized.includes('finaliz') || normalized.includes('cerrad');
+  }
+
+  private parseIncidentDate(value?: string | null): number {
+    const parsed = value ? new Date(value).getTime() : 0;
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
   openCreateTenantForm(): void {
@@ -1172,7 +1417,7 @@ export class TenantIsolationPage {
     }
 
     if (!idUsuario) {
-      this.snackBar.open('Ingresa un ID de usuario válido.', 'Cerrar', { duration: 3000 });
+      this.snackBar.open('Ingresa un ID de usuario vÃ¡lido.', 'Cerrar', { duration: 3000 });
       return;
     }
 
@@ -1200,7 +1445,7 @@ export class TenantIsolationPage {
     }
 
     if (!idTecnico) {
-      this.snackBar.open('Ingresa un ID de técnico válido.', 'Cerrar', { duration: 3000 });
+      this.snackBar.open('Ingresa un ID de tÃ©cnico vÃ¡lido.', 'Cerrar', { duration: 3000 });
       return;
     }
 
@@ -1214,3 +1459,5 @@ export class TenantIsolationPage {
     this.verifyIsolationMutation.mutate();
   }
 }
+
+
