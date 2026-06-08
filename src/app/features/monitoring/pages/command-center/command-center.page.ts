@@ -1,17 +1,51 @@
-import { Component, inject, AfterViewInit, ElementRef, ViewChild, OnDestroy, PLATFORM_ID, effect, DestroyRef } from '@angular/core';
-import { CommonModule, isPlatformBrowser } from '@angular/common';
-import { MonitoringService } from '../../data-access/monitoring.service';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  OnDestroy,
+  PLATFORM_ID,
+  ViewChild,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
+import { CommonModule, DecimalPipe, isPlatformBrowser } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { injectQuery } from '@tanstack/angular-query-experimental';
 import { lastValueFrom } from 'rxjs';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { LucideAngularModule, Activity, Users, DollarSign, AlertTriangle, Map as MapIcon, TrendingUp, Info } from 'lucide-angular';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import {
+  LucideAngularModule,
+  Activity,
+  AlertTriangle,
+  Building2,
+  Clock3,
+  Map as MapIcon,
+  RefreshCw,
+  ShieldAlert,
+  Siren,
+  TrendingUp,
+} from 'lucide-angular';
 import { Chart, registerables } from 'chart.js';
 import type * as L from 'leaflet';
-import { toObservable, takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { GlobalStats } from '../../models/monitoring.model';
-import { PageHeaderComponent, LoadingStateComponent } from '@shared/ui';
-import { PushNotificationService } from '@core/services/push-notification.service';
 
+import { AuthStore } from '@features/identity/auth/state/auth.store';
+import { WorkshopsService } from '@features/workshops/data-access/workshops.service';
+import { SucursalResponse, TallerResponse } from '@core/models/workshops.model';
+import {
+  EmptyStateComponent,
+  LoadingStateComponent,
+  PageHeaderComponent,
+  SelectComponent,
+  SelectOption,
+} from '@shared/ui';
+import { MonitoringService } from '../../data-access/monitoring.service';
+import { OperationalDashboardResponse } from '../../models/monitoring.model';
 
 type HeatPoint = [number, number, number?];
 type HeatLayerOptions = {
@@ -31,313 +65,676 @@ Chart.register(...registerables);
 @Component({
   selector: 'app-command-center',
   standalone: true,
+  providers: [DecimalPipe],
   imports: [
     CommonModule,
+    FormsModule,
+    RouterLink,
+    MatButtonModule,
     MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
     LucideAngularModule,
     PageHeaderComponent,
-    LoadingStateComponent
+    LoadingStateComponent,
+    EmptyStateComponent,
+    SelectComponent,
   ],
   template: `
     <div class="page-container">
-      <app-page-header 
-        title="Centro de Mando"
-        subtitle="Monitoreo estratégico de la red de asistencia y rendimiento del negocio en tiempo real.">
-        <div actions>
-          <div class="header-status">
-            <div class="live-indicator">
-              <span class="pulse-dot"></span>
-              INTELIGENCIA ACTIVA
-            </div>
-          </div>
+      <app-page-header
+        [title]="pageTitle()"
+        [subtitle]="pageSubtitle()">
+        <div actions class="header-actions">
+          @if (dashboardQuery.isFetching() && dashboardQuery.data()) {
+            <span class="sync-indicator">
+              <span class="sync-dot"></span>
+              Actualizando
+            </span>
+          }
+          <span class="scope-badge sm-glass-card">{{ scopeLabel() }}</span>
+          <a mat-stroked-button routerLink="/monitoring/sla-alerts" class="secondary-btn">
+            <lucide-icon [img]="shieldIcon" [size]="16"></lucide-icon>
+            Ver Alertas SLA
+          </a>
+          <button mat-stroked-button class="secondary-btn" (click)="dashboardQuery.refetch()">
+            <lucide-icon [img]="refreshIcon" [size]="16"></lucide-icon>
+            Actualizar
+          </button>
+          <button mat-button class="clear-btn" (click)="clearFilters()">
+            Limpiar filtros
+          </button>
         </div>
       </app-page-header>
 
-      @if (statsQuery.isLoading()) {
-        <app-loading-state message="Cargando inteligencia de negocio..."></app-loading-state>
-      } @else if (statsQuery.data(); as stats) {
-        <!-- Mini Stats -->
-        <div class="mini-stats-grid">
-          <div class="stat-box sm-glass-card">
-            <div class="icon-wrap sapphire"><lucide-icon [img]="talleresIcon" [size]="20"></lucide-icon></div>
-            <div class="info">
-              <span class="label">Talleres</span>
-              <span class="value">{{ stats.total_talleres }}</span>
-            </div>
-            <div class="trend positive">+12%</div>
+      <div class="filters-container sm-glass-card">
+        <div class="filters-grid">
+          @if (isSuperAdmin()) {
+            <app-select
+              class="sm-select"
+              [value]="selectedWorkshop()"
+              (valueChange)="onWorkshopChange($event)"
+              placeholder="Global o taller"
+              [options]="workshopOptions()">
+            </app-select>
+          }
+
+          @if (canFilterBranches()) {
+            <app-select
+              class="sm-select"
+              [value]="selectedBranch()"
+              (valueChange)="onBranchChange($event)"
+              placeholder="Todas las sucursales"
+              [options]="branchOptions()">
+            </app-select>
+          } @else if (isAdminSucursal()) {
+            <span class="fixed-context sm-glass-card">Sucursal actual: {{ myBranchName() }}</span>
+          }
+
+          <app-select
+            class="sm-select"
+            [value]="selectedEstado()"
+            (valueChange)="selectedEstado.set($event)"
+            placeholder="Todos los estados"
+            [options]="statusOptions">
+          </app-select>
+
+          <app-select
+            class="sm-select"
+            [value]="selectedPrioridad()"
+            (valueChange)="selectedPrioridad.set($event)"
+            placeholder="Todas las prioridades"
+            [options]="priorityOptions">
+          </app-select>
+
+          <app-select
+            class="sm-select"
+            [value]="selectedOrigen()"
+            (valueChange)="selectedOrigen.set($event)"
+            placeholder="Todos los origenes"
+            [options]="originOptions">
+          </app-select>
+
+          <div class="date-filter-group">
+            <span class="date-label">Desde</span>
+            <mat-form-field appearance="outline" class="sm-capsule-field date-field" subscriptSizing="dynamic">
+              <input matInput type="date" [ngModel]="dateFrom()" (ngModelChange)="dateFrom.set($event)" />
+            </mat-form-field>
           </div>
-          <div class="stat-box sm-glass-card">
-            <div class="icon-wrap emerald"><lucide-icon [img]="incidentsIcon" [size]="20"></lucide-icon></div>
-            <div class="info">
-              <span class="label">Total Auxilios</span>
-              <span class="value">{{ stats.total_incidentes }}</span>
-            </div>
-            <div class="trend positive">+5%</div>
-          </div>
-          <div class="stat-box sm-glass-card">
-            <div class="icon-wrap orange"><lucide-icon [img]="revenueIcon" [size]="20"></lucide-icon></div>
-            <div class="info">
-              <span class="label">Comisiones</span>
-              <span class="value">{{ stats.total_comisiones | currency:'Bs ' }}</span>
-            </div>
-            <div class="trend positive">+18%</div>
-          </div>
-          <div class="stat-box sm-glass-card">
-            <div class="icon-wrap red"><lucide-icon [img]="activeIcon" [size]="20"></lucide-icon></div>
-            <div class="info">
-              <span class="label">Activos Hoy</span>
-              <span class="value">{{ stats.emergencias_activas }}</span>
-            </div>
-            <div class="trend warning">Crit.</div>
+
+          <div class="date-filter-group">
+            <span class="date-label">Hasta</span>
+            <mat-form-field appearance="outline" class="sm-capsule-field date-field" subscriptSizing="dynamic">
+              <input matInput type="date" [ngModel]="dateTo()" (ngModelChange)="dateTo.set($event)" />
+            </mat-form-field>
           </div>
         </div>
+      </div>
 
-        <div class="main-grid">
-          <!-- Gráfico de Rendimiento -->
-          <mat-card class="chart-card sm-glass-card">
-            <div class="card-header">
-              <div class="title-with-icon">
-                <lucide-icon [img]="trendIcon" [size]="18"></lucide-icon>
-                <h3>Rendimiento Operativo</h3>
-              </div>
-              <lucide-icon [img]="infoIcon" [size]="14" class="info-icon" matTooltip="Evolución de comisiones e incidentes"></lucide-icon>
-            </div>
-            <div class="chart-container">
-              <canvas #performanceChart></canvas>
-            </div>
-          </mat-card>
-
-          <!-- Mapa de Calor -->
-          <mat-card class="map-card sm-glass-card">
-            <div class="card-header">
-              <div class="title-with-icon">
-                <lucide-icon [img]="mapIcon" [size]="18"></lucide-icon>
-                <h3>Densidad de Emergencias</h3>
-              </div>
-              <div class="map-legend">
-                <span class="legend-item"><span class="dot low"></span>Baja</span>
-                <span class="legend-item"><span class="dot high"></span>Alta</span>
-              </div>
-            </div>
-            <div #heatmapContainer class="heatmap-container" ngSkipHydration></div>
-          </mat-card>
+      @if (dashboardQuery.isLoading()) {
+        <app-loading-state message="Calculando KPIs operacionales reales..."></app-loading-state>
+      } @else if (dashboardQuery.isError()) {
+        <div class="error-state sm-glass-card">
+          <h3>No fue posible cargar el dashboard operacional.</h3>
+          <p>Reintentar</p>
+          <button mat-stroked-button class="secondary-btn" (click)="dashboardQuery.refetch()">
+            <lucide-icon [img]="refreshIcon" [size]="16"></lucide-icon>
+            Reintentar
+          </button>
         </div>
+      } @else if (dashboardData(); as dashboard) {
+        @if (!hasDashboardContent(dashboard)) {
+          <div class="empty-dashboard sm-glass-card">
+            <app-empty-state
+              [icon]="trendIcon"
+              title="No hay datos suficientes para calcular KPIs en este rango."
+              message="Ajusta las fechas o los filtros para ver actividad operacional real.">
+            </app-empty-state>
+          </div>
+        } @else {
+          <div class="mini-stats-grid">
+            <div class="stat-box sm-glass-card">
+              <div class="icon-wrap sapphire"><lucide-icon [img]="incidentsIcon" [size]="20"></lucide-icon></div>
+              <div class="info">
+                <span class="label">Total Emergencias</span>
+                <span class="value">{{ dashboard.summary.total_incidentes }}</span>
+              </div>
+            </div>
+            <div class="stat-box sm-glass-card">
+              <div class="icon-wrap emerald"><lucide-icon [img]="activeIcon" [size]="20"></lucide-icon></div>
+              <div class="info">
+                <span class="label">Activas</span>
+                <span class="value">{{ dashboard.summary.incidentes_activos }}</span>
+              </div>
+            </div>
+            <div class="stat-box sm-glass-card">
+              <div class="icon-wrap orange"><lucide-icon [img]="clockIcon" [size]="20"></lucide-icon></div>
+              <div class="info">
+                <span class="label">Promedio Llegada</span>
+                <span class="value">{{ formatMinutes(dashboard.summary.tiempo_promedio_llegada_min) }}</span>
+              </div>
+            </div>
+            <div class="stat-box sm-glass-card">
+              <div class="icon-wrap red"><lucide-icon [img]="shieldIcon" [size]="20"></lucide-icon></div>
+              <div class="info">
+                <span class="label">Cumplimiento SLA</span>
+                <span class="value">{{ formatPercentage(dashboard.summary.cumplimiento_sla_pct) }}</span>
+              </div>
+            </div>
+            <div class="stat-box sm-glass-card">
+              <div class="icon-wrap purple"><lucide-icon [img]="alertIcon" [size]="20"></lucide-icon></div>
+              <div class="info">
+                <span class="label">Alertas Activas</span>
+                <span class="value">{{ dashboard.summary.alertas_sla_activas }}</span>
+              </div>
+            </div>
+            <div class="stat-box sm-glass-card">
+              <div class="icon-wrap gold"><lucide-icon [img]="trendIcon" [size]="20"></lucide-icon></div>
+              <div class="info">
+                <span class="label">Finalizadas</span>
+                <span class="value">{{ dashboard.summary.incidentes_finalizados }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="main-grid">
+            <mat-card class="chart-card sm-glass-card">
+              <div class="card-header">
+                <div class="title-with-icon">
+                  <lucide-icon [img]="trendIcon" [size]="18"></lucide-icon>
+                  <h3>Incidentes por Estado</h3>
+                </div>
+              </div>
+              <div class="chart-container">
+                <canvas #performanceChart></canvas>
+              </div>
+            </mat-card>
+
+            <mat-card class="map-card sm-glass-card">
+              <div class="card-header">
+                <div class="title-with-icon">
+                  <lucide-icon [img]="mapIcon" [size]="18"></lucide-icon>
+                  <h3>Densidad de Emergencias</h3>
+                </div>
+              </div>
+              @if (dashboard.density.length === 0) {
+                <app-empty-state
+                  [icon]="mapIcon"
+                  title="Sin coordenadas suficientes"
+                  message="No hay incidentes con ubicacion valida para mostrar densidad en este rango.">
+                </app-empty-state>
+              } @else {
+                <div #heatmapContainer class="heatmap-container" ngSkipHydration></div>
+              }
+            </mat-card>
+          </div>
+
+          <div class="secondary-grid">
+            <mat-card class="list-card sm-glass-card">
+              <div class="card-header">
+                <div class="title-with-icon">
+                  <lucide-icon [img]="buildingIcon" [size]="18"></lucide-icon>
+                  <h3>{{ rankingTitle() }}</h3>
+                </div>
+              </div>
+              @if (dashboard.ranking.length === 0) {
+                <p class="empty-inline">Sin datos suficientes para ranking.</p>
+              } @else {
+                <div class="ranking-list">
+                  @for (item of dashboard.ranking; track item.label) {
+                    <div class="ranking-row">
+                      <div>
+                        <strong>{{ item.label }}</strong>
+                        <p>{{ item.total_incidentes }} incidentes</p>
+                      </div>
+                      <div class="metrics">
+                        <span>SLA {{ formatPercentage(item.cumplimiento_sla_pct) }}</span>
+                        <span>Llegada {{ formatMinutes(item.tiempo_promedio_llegada_min) }}</span>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </mat-card>
+
+            <mat-card class="list-card sm-glass-card">
+              <div class="card-header">
+                <div class="title-with-icon">
+                  <lucide-icon [img]="activityIcon" [size]="18"></lucide-icon>
+                  <h3>Actividad Reciente</h3>
+                </div>
+              </div>
+              @if (dashboard.recent_activity.length === 0) {
+                <p class="empty-inline">No hay incidentes para este filtro.</p>
+              } @else {
+                <div class="activity-list">
+                  @for (item of dashboard.recent_activity; track item.id_incidente) {
+                    <a class="activity-row" [routerLink]="['/emergencies/details', item.id_incidente]">
+                      <div class="activity-main">
+                        <strong>{{ item.vehiculo || 'Vehiculo sin detalle' }}</strong>
+                        <p>{{ item.resumen || 'Sin resumen disponible' }}</p>
+                      </div>
+                      <div class="activity-meta">
+                        <span class="status-chip">{{ item.estado }}</span>
+                        <span>{{ item.prioridad }}</span>
+                      </div>
+                    </a>
+                  }
+                </div>
+              }
+            </mat-card>
+          </div>
+        }
       }
     </div>
   `,
   styles: [`
-    .page-container { padding: 2rem; max-width: 1400px; margin: 0 auto; animation: fadeIn 0.4s ease-out; }
-
-    .live-indicator { display: flex; align-items: center; gap: 0.6rem; background: rgba(var(--sm-rgb-sapphire-400), 0.1); padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.75rem; font-weight: 700; color: var(--sm-color-sapphire-400); letter-spacing: 0.05em; }
-    .pulse-dot { width: 8px; height: 8px; background: var(--sm-color-sapphire-400); border-radius: 50%; box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0.7); animation: pulse 1.5s infinite; }
-
-    .mini-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
-    .stat-box { padding: 1.5rem; display: flex; align-items: center; gap: 1.25rem; position: relative; overflow: hidden;
-      .icon-wrap { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center;
-        &.sapphire { background: rgba(var(--sm-rgb-sapphire-400), 0.15); color: var(--sm-color-sapphire-400); }
-        &.emerald { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
-        &.orange { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
-        &.red { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
-      }
-      .info { display: flex; flex-direction: column; gap: 0.2rem;
-        .label { font-size: 0.7rem; color: var(--sm-color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-        .value { font-size: 1.6rem; font-weight: 800; color: white; }
-      }
-      .trend { position: absolute; top: 1.5rem; right: 1.5rem; font-size: 0.65rem; font-weight: 700; padding: 0.2rem 0.5rem; border-radius: 4px;
-        &.positive { background: rgba(46, 204, 113, 0.1); color: #2ecc71; }
-        &.warning { background: rgba(231, 76, 60, 0.1); color: #e74c3c; }
-      }
+    .page-container { padding: 2rem; max-width: 1400px; margin: 0 auto; }
+    .header-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .sync-indicator {
+      display: inline-flex; align-items: center; gap: 0.45rem; color: var(--sm-color-sapphire-400);
+      font-size: 0.78rem; font-weight: 700;
     }
-
-    .main-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
-    .chart-card, .map-card { padding: 1.5rem; border: none;
-      .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; 
-        h3 { margin: 0; font-size: 1rem; font-weight: 600; color: white; } 
-        .info-icon { color: var(--sm-color-text-muted); cursor: pointer; }
-      }
+    .sync-dot {
+      width: 0.5rem; height: 0.5rem; border-radius: 999px; background: var(--sm-color-sapphire-400);
+      box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0.45); animation: pulse 1.6s infinite;
     }
-
-    .title-with-icon { display: flex; align-items: center; gap: 0.75rem; color: var(--sm-color-sapphire-400); }
-
-    .chart-container { height: 350px; position: relative; }
-    .heatmap-container { height: 400px; border-radius: 12px; background: #0f172a; z-index: 1; border: 1px solid rgba(255,255,255,0.05); }
-
-    .map-legend { display: flex; gap: 1rem; font-size: 0.7rem; color: var(--sm-color-text-muted); 
-      .legend-item { display: flex; align-items: center; gap: 0.3rem; 
-        .dot { width: 8px; height: 8px; border-radius: 50%; 
-          &.low { background: blue; } &.high { background: red; }
-        }
-      }
+    .scope-badge, .fixed-context {
+      padding: 0.45rem 0.8rem; border-radius: 999px; color: var(--sm-color-sapphire-400);
+      font-size: 0.78rem; font-weight: 700;
     }
-
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0.7); } 70% { box-shadow: 0 0 0 10px rgba(var(--sm-rgb-sapphire-400), 0); } 100% { box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0); } }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-    @media (max-width: 1200px) { .main-grid { grid-template-columns: 1fr; } }
-  `]
+    .secondary-btn { display: inline-flex; align-items: center; gap: 0.45rem; }
+    .clear-btn { color: var(--sm-color-text-muted); font-weight: 700; }
+    .filters-container { padding: 1.2rem 1.5rem; margin-bottom: 1.5rem; }
+    .filters-grid { display: flex; gap: 0.85rem; flex-wrap: wrap; align-items: center; }
+    .sm-select { width: 170px; }
+    .date-filter-group { display: flex; align-items: center; gap: 0.55rem; }
+    .date-label {
+      font-size: 0.72rem; color: var(--sm-color-text-muted); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .date-field { width: 160px; }
+    .mini-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+    .stat-box { padding: 1.25rem; display: flex; align-items: center; gap: 1rem; }
+    .icon-wrap { width: 46px; height: 46px; border-radius: 12px; display: flex; align-items: center; justify-content: center; }
+    .icon-wrap.sapphire { background: rgba(var(--sm-rgb-sapphire-400), 0.15); color: var(--sm-color-sapphire-400); }
+    .icon-wrap.emerald { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
+    .icon-wrap.orange { background: rgba(243, 156, 18, 0.15); color: #f39c12; }
+    .icon-wrap.red { background: rgba(231, 76, 60, 0.15); color: #e74c3c; }
+    .icon-wrap.purple { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+    .icon-wrap.gold { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+    .info { display: flex; flex-direction: column; gap: 0.2rem; }
+    .label { font-size: 0.72rem; color: var(--sm-color-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .value { font-size: 1.5rem; font-weight: 800; color: white; }
+    .main-grid, .secondary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
+    .chart-card, .map-card, .list-card { padding: 1.4rem; border: none; }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+    .title-with-icon { display: flex; align-items: center; gap: 0.7rem; color: var(--sm-color-sapphire-400); }
+    .title-with-icon h3 { margin: 0; font-size: 1rem; color: white; }
+    .chart-container { height: 340px; position: relative; }
+    .heatmap-container { height: 380px; border-radius: 12px; overflow: hidden; background: #0f172a; border: 1px solid rgba(255,255,255,0.05); }
+    .ranking-list, .activity-list { display: flex; flex-direction: column; gap: 0.75rem; }
+    .ranking-row, .activity-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: 0.9rem 1rem; border-radius: 14px; background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .ranking-row p, .activity-main p { margin: 0.2rem 0 0; color: var(--sm-color-text-muted); font-size: 0.82rem; }
+    .metrics { display: flex; flex-direction: column; gap: 0.25rem; text-align: right; color: var(--sm-color-text-soft); font-size: 0.82rem; }
+    .activity-row { text-decoration: none; color: inherit; }
+    .activity-main { flex: 1; }
+    .activity-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem; font-size: 0.8rem; color: var(--sm-color-text-soft); }
+    .status-chip {
+      background: rgba(var(--sm-rgb-sapphire-400), 0.12);
+      color: var(--sm-color-sapphire-300);
+      padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+    }
+    .empty-inline { margin: 0; color: var(--sm-color-text-muted); }
+    .empty-dashboard { padding: 1rem; }
+    .error-state {
+      padding: 2rem; text-align: center; color: #e74c3c; display: flex; flex-direction: column;
+      gap: 0.85rem; align-items: center;
+    }
+    .error-state h3, .error-state p { margin: 0; }
+    @media (max-width: 1200px) {
+      .main-grid, .secondary-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .date-filter-group { width: 100%; justify-content: space-between; }
+      .date-field { width: min(220px, 100%); }
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0.45); }
+      70% { box-shadow: 0 0 0 10px rgba(var(--sm-rgb-sapphire-400), 0); }
+      100% { box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0); }
+    }
+  `],
 })
 export class CommandCenterPage implements AfterViewInit, OnDestroy {
   private monitoringService = inject(MonitoringService);
-  
-  @ViewChild('performanceChart') performanceChartRef!: ElementRef;
-  @ViewChild('heatmapContainer') heatmapContainer!: ElementRef;
-  private chart: Chart | null = null;
-  private map: L.Map | null = null;
-
-  private L: typeof L | undefined;
+  private workshopsService = inject(WorkshopsService);
+  private authStore = inject(AuthStore);
   private platformId = inject(PLATFORM_ID);
 
-  readonly talleresIcon = Users;
-  readonly incidentsIcon = Activity;
-  readonly revenueIcon = DollarSign;
-  readonly activeIcon = AlertTriangle;
-  readonly mapIcon = MapIcon;
+  @ViewChild('performanceChart') performanceChartRef?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('heatmapContainer') heatmapContainer?: ElementRef<HTMLDivElement>;
+
+  private chart: Chart | null = null;
+  private map: L.Map | null = null;
+  private L: typeof L | undefined;
+
+  readonly incidentsIcon = Siren;
+  readonly activeIcon = Activity;
+  readonly clockIcon = Clock3;
   readonly trendIcon = TrendingUp;
-  readonly infoIcon = Info;
+  readonly mapIcon = MapIcon;
+  readonly shieldIcon = ShieldAlert;
+  readonly alertIcon = AlertTriangle;
+  readonly buildingIcon = Building2;
+  readonly activityIcon = Activity;
+  readonly refreshIcon = RefreshCw;
 
-  private pushService = inject(PushNotificationService);
+  readonly statusOptions: SelectOption[] = [
+    { value: '', label: 'Todos los estados' },
+    { value: 'PENDIENTE', label: 'Pendiente' },
+    { value: 'ANALIZADO', label: 'Analizado' },
+    { value: 'TALLER_ASIGNADO', label: 'Taller asignado' },
+    { value: 'EN_CAMINO', label: 'En camino' },
+    { value: 'TECNICO_EN_SITIO', label: 'Tecnico en sitio' },
+    { value: 'EN_ATENCION', label: 'En atencion' },
+    { value: 'EN_PROGRESO', label: 'En progreso' },
+    { value: 'FINALIZADO', label: 'Finalizado' },
+    { value: 'COMPLETADO', label: 'Completado' },
+    { value: 'CANCELADO', label: 'Cancelado' },
+  ];
+  readonly priorityOptions: SelectOption[] = [
+    { value: '', label: 'Todas las prioridades' },
+    { value: 'CRITICA', label: 'Critica' },
+    { value: 'ALTA', label: 'Alta' },
+    { value: 'MEDIA', label: 'Media' },
+    { value: 'BAJA', label: 'Baja' },
+  ];
+  readonly originOptions: SelectOption[] = [
+    { value: '', label: 'Todos los origenes' },
+    { value: 'COTIZACION', label: 'Cotizacion' },
+    { value: 'ONLINE', label: 'Online' },
+    { value: 'OFFLINE_MOVIL', label: 'Offline movil' },
+  ];
 
-  statsQuery = injectQuery(() => ({
-    queryKey: ['global-stats'],
-    queryFn: () => lastValueFrom(this.monitoringService.getGlobalStats()),
-    // Ya no usamos refetchInterval de 60s, usamos Push
+  readonly workshops = signal<TallerResponse[]>([]);
+  readonly branches = signal<SucursalResponse[]>([]);
+  readonly myBranchName = signal('Sin sucursal asignada');
+
+  readonly selectedWorkshop = signal('');
+  readonly selectedBranch = signal('');
+  readonly selectedEstado = signal('');
+  readonly selectedPrioridad = signal('');
+  readonly selectedOrigen = signal('');
+  readonly dateFrom = signal('');
+  readonly dateTo = signal('');
+
+  readonly isSuperAdmin = computed(
+    () => this.authStore.user()?.rol_nombre === 'superadmin',
+  );
+  readonly isOwner = computed(() => {
+    const user = this.authStore.user();
+    return user?.rol_nombre === 'admin_taller' && user?.rol_contexto === 'owner';
+  });
+  readonly isAdminSucursal = computed(() => {
+    const user = this.authStore.user();
+    return user?.rol_nombre === 'admin_taller' && user?.rol_contexto === 'admin_sucursal';
+  });
+  readonly canFilterBranches = computed(() => this.isOwner());
+
+  readonly workshopOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Global o taller' },
+    ...this.workshops().map(workshop => ({
+      value: workshop.id_taller,
+      label: workshop.nombre,
+    })),
+  ]);
+
+  readonly branchOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Todas las sucursales' },
+    ...this.branches().map(branch => ({
+      value: branch.id_sucursal,
+      label: branch.nombre,
+    })),
+  ]);
+
+  readonly filters = computed(() => ({
+    date_from: this.dateFrom() || undefined,
+    date_to: this.dateTo() || undefined,
+    id_taller: this.isSuperAdmin() ? this.selectedWorkshop() || undefined : undefined,
+    id_sucursal: this.canFilterBranches() ? this.selectedBranch() || undefined : undefined,
+    estado: this.selectedEstado() || undefined,
+    prioridad: this.selectedPrioridad() || undefined,
+    origen: this.selectedOrigen() || undefined,
   }));
 
-  constructor() {
-    // Escuchamos notificaciones push para refrescar los datos estratégicos
-    this.pushService.message$
-      .pipe(takeUntilDestroyed())
-      .subscribe(() => {
-        this.statsQuery.refetch();
-      });
+  readonly filtersKey = computed(() => JSON.stringify(this.filters()));
 
-    // Usamos un efecto reactivo para inicializar componentes cuando los datos y la librería estén listos
+  dashboardQuery = injectQuery<OperationalDashboardResponse>(() => ({
+    queryKey: ['operational-dashboard', this.filtersKey()],
+    queryFn: () =>
+      lastValueFrom(
+        this.monitoringService.getOperationalDashboard(this.filters()),
+      ),
+  }));
+
+  readonly dashboardData = computed(
+    () => this.dashboardQuery.data() as OperationalDashboardResponse | undefined,
+  );
+
+  readonly pageTitle = computed(() => {
+    if (this.isSuperAdmin()) return 'Centro de Mando Operacional';
+    if (this.isOwner()) return 'Dashboard Operacional del Taller';
+    return 'Dashboard Operacional de Sucursal';
+  });
+
+  readonly pageSubtitle = computed(() => {
+    if (this.isSuperAdmin()) {
+      return 'KPIs operacionales, densidad de demanda y cumplimiento SLA de toda la plataforma.';
+    }
+    if (this.isOwner()) {
+      return 'Vista consolidada de incidentes, tiempos operativos y rendimiento de tus sucursales.';
+    }
+    return 'Seguimiento de servicios, tiempos y alertas SLA de tu sucursal actual.';
+  });
+
+  readonly rankingTitle = computed(() =>
+    this.isSuperAdmin()
+      ? 'Ranking de Talleres'
+      : 'Ranking de Sucursales',
+  );
+
+  readonly scopeLabel = computed(() => {
+    const user = this.authStore.user();
+    if (this.isSuperAdmin()) {
+      return this.selectedWorkshop()
+        ? 'Vista filtrada por taller'
+        : 'Vista global';
+    }
+    if (this.isOwner()) {
+      return this.selectedBranch()
+        ? 'Owner - sucursal filtrada'
+        : 'Owner - taller completo';
+    }
+    return `Sucursal fija - ${user?.id_sucursal ? 'contexto protegido' : 'sin sucursal'}`;
+  });
+
+  constructor() {
+    if (this.isSuperAdmin()) {
+      this.workshopsService.getAllWorkshops().subscribe({
+        next: workshops => this.workshops.set(workshops ?? []),
+      });
+    } else if (this.isOwner()) {
+      this.workshopsService.getBranches().subscribe({
+        next: branches => this.branches.set(branches ?? []),
+      });
+    } else if (this.isAdminSucursal()) {
+      this.workshopsService.getMyBranch().subscribe({
+        next: branch => {
+          if (branch) this.myBranchName.set(branch.nombre);
+        },
+      });
+    }
+
     effect(() => {
-      const stats = this.statsQuery.data();
-      const isBrowser = isPlatformBrowser(this.platformId);
-      
-      if (isBrowser && stats && this.L) {
-        // Pequeño delay para asegurar que el DOM esté estable
-        setTimeout(() => {
-          this.initChart(stats);
-          this.initMap(stats);
-        }, 100);
+      const dashboard = this.dashboardData();
+      if (!dashboard || !this.hasDashboardContent(dashboard) || !isPlatformBrowser(this.platformId) || !this.L) {
+        this.chart?.destroy();
+        this.chart = null;
+        return;
       }
+      setTimeout(() => {
+        this.initChart(dashboard);
+        if (dashboard.density.length === 0) {
+          this.map?.remove();
+          this.map = null;
+        } else {
+          this.initMap(dashboard);
+        }
+      }, 50);
     });
   }
 
   async ngAfterViewInit() {
-    if (isPlatformBrowser(this.platformId)) {
-      const Leaflet = await import('leaflet');
-      this.L = (Leaflet as any).default || Leaflet;
-      
-      // Plugin de calor necesita el objeto global L en algunos entornos
-      (window as any).L = this.L;
-      await import('leaflet.heat');
-    }
+    if (!isPlatformBrowser(this.platformId)) return;
+    const Leaflet = await import('leaflet');
+    this.L = (Leaflet as any).default || Leaflet;
+    (window as any).L = this.L;
+    await import('leaflet.heat');
   }
 
   ngOnDestroy() {
-    if (this.chart) this.chart.destroy();
-    if (this.map) this.map.remove();
+    this.chart?.destroy();
+    this.map?.remove();
   }
 
-  private initChart(stats: GlobalStats) {
+  onWorkshopChange(value: string) {
+    this.selectedWorkshop.set(value);
+    this.selectedBranch.set('');
+  }
+
+  onBranchChange(value: string) {
+    this.selectedBranch.set(value);
+  }
+
+  clearFilters() {
+    this.selectedWorkshop.set('');
+    this.selectedBranch.set('');
+    this.selectedEstado.set('');
+    this.selectedPrioridad.set('');
+    this.selectedOrigen.set('');
+    this.dateFrom.set('');
+    this.dateTo.set('');
+  }
+
+  hasDashboardContent(dashboard: OperationalDashboardResponse): boolean {
+    return dashboard.summary.total_incidentes > 0;
+  }
+
+  formatMinutes(value: number | null | undefined): string {
+    if (value === null || value === undefined) return 'Sin datos';
+    return `${value.toFixed(1)} min`;
+  }
+
+  formatPercentage(value: number | null | undefined): string {
+    if (value === null || value === undefined) return 'Sin datos';
+    return `${value.toFixed(1)}%`;
+  }
+
+  private initChart(dashboard: OperationalDashboardResponse) {
     if (!this.performanceChartRef) return;
-    if (this.chart) this.chart.destroy();
+    const canvas = this.performanceChartRef.nativeElement;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-    const ctx = this.performanceChartRef.nativeElement.getContext('2d');
-    
-    // Gradientes para un look más premium
-    const blueGradient = ctx.createLinearGradient(0, 0, 0, 400);
-    blueGradient.addColorStop(0, 'rgba(52, 152, 219, 0.4)');
-    blueGradient.addColorStop(1, 'rgba(52, 152, 219, 0)');
+    this.chart?.destroy();
 
-    const greenGradient = ctx.createLinearGradient(0, 0, 0, 400);
-    greenGradient.addColorStop(0, 'rgba(46, 204, 113, 0.4)');
-    greenGradient.addColorStop(1, 'rgba(46, 204, 113, 0)');
+    const labels = dashboard.series.incidentes_por_estado.map(item => item.label);
+    const totals = dashboard.series.incidentes_por_estado.map(item => item.value);
+    const colors = [
+      '#3498db',
+      '#2ecc71',
+      '#f39c12',
+      '#e74c3c',
+      '#9b59b6',
+      '#1abc9c',
+      '#f1c40f',
+      '#95a5a6',
+    ];
 
     this.chart = new Chart(ctx, {
-      type: 'line',
+      type: 'bar',
       data: {
-        labels: stats.rendimiento_operativo.labels,
-        datasets: stats.rendimiento_operativo.datasets.map((ds, i) => ({
-          ...ds,
-          borderColor: i === 0 ? '#3498db' : '#2ecc71',
-          backgroundColor: i === 0 ? blueGradient : greenGradient,
-          fill: true,
-          tension: 0.4,
-          borderWidth: 3,
-          pointRadius: 4,
-          pointBackgroundColor: '#fff',
-          pointBorderWidth: 2,
-        }))
+        labels,
+        datasets: [{
+          label: 'Incidentes',
+          data: totals,
+          backgroundColor: totals.map((_, index) => colors[index % colors.length]),
+          borderRadius: 10,
+          borderSkipped: false,
+          maxBarThickness: 48,
+        }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { 
-          legend: { 
-            display: true, 
-            position: 'top',
-            labels: { color: '#94a3b8', font: { size: 11 }, usePointStyle: true }
+        plugins: {
+          legend: {
+            display: false,
           },
           tooltip: {
-            backgroundColor: '#1e293b',
-            titleColor: '#fff',
-            bodyColor: '#cbd5e1',
-            padding: 12,
-            borderColor: 'rgba(255,255,255,0.1)',
-            borderWidth: 1,
-            displayColors: true
-          }
+            callbacks: {
+              label: (context) => `${context.parsed.y} incidentes`,
+            },
+          },
         },
         scales: {
-          y: { 
-            grid: { color: 'rgba(255,255,255,0.05)' }, 
-            ticks: { color: '#94a3b8', font: { size: 10 } },
-            beginAtZero: true
+          y: {
+            beginAtZero: true,
+            ticks: { color: '#94a3b8' },
+            grid: { color: 'rgba(255,255,255,0.05)' },
           },
-          x: { 
-            grid: { display: false }, 
-            ticks: { color: '#94a3b8', font: { size: 10 } } 
-          }
-        }
-      }
+          x: {
+            ticks: { color: '#94a3b8' },
+            grid: { display: false },
+          },
+        },
+      },
     });
   }
 
-  private initMap(stats: GlobalStats) {
-    if (!this.L || !this.heatmapContainer) return;
+  private initMap(dashboard: OperationalDashboardResponse) {
+    if (!this.L || !this.heatmapContainer || dashboard.density.length === 0) return;
     const leafletWithHeat = this.L as LeafletWithHeat;
 
-    if (this.map) {
-      this.map.remove();
-      this.map = null;
-    }
-
+    this.map?.remove();
+    const first = dashboard.density[0];
     this.map = this.L.map(this.heatmapContainer.nativeElement, {
       zoomControl: false,
-      scrollWheelZoom: false
-    }).setView([-17.7833, -63.1821], 13); // Santa Cruz
+      scrollWheelZoom: false,
+    }).setView([first.latitud, first.longitud], 11);
 
     this.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap'
+      attribution: '&copy; OpenStreetMap',
     }).addTo(this.map);
 
-    this.L.control.zoom({ position: 'bottomright' }).addTo(this.map);
+    const points: HeatPoint[] = dashboard.density.map(item => [
+      item.latitud,
+      item.longitud,
+      item.intensidad,
+    ]);
 
-    leafletWithHeat.heatLayer(stats.puntos_calor, {
-      radius: 30,
-      blur: 20,
-      maxZoom: 17,
-      gradient: { 0.2: '#3498db', 0.5: '#2ecc71', 0.8: '#f1c40f', 1: '#e74c3c' }
+    leafletWithHeat.heatLayer(points, {
+      radius: 28,
+      blur: 18,
+      maxZoom: 16,
+      gradient: { 0.2: '#3498db', 0.5: '#2ecc71', 0.8: '#f1c40f', 1: '#e74c3c' },
     }).addTo(this.map);
 
-    // Forzar recalcular tamaño para evitar pantalla negra en contenedores dinámicos
-    setTimeout(() => {
-      this.map?.invalidateSize();
-    }, 500);
+    setTimeout(() => this.map?.invalidateSize(), 300);
   }
 }

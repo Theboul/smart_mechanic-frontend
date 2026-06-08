@@ -2,7 +2,16 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { environment } from '@env/environment';
 import { Observable, map } from 'rxjs';
-import { GlobalStats, AuditLog } from '../models/monitoring.model';
+import {
+  AuditLog,
+  AuditLogFilters,
+  AuditLogPage,
+  GlobalStats,
+  OperationalDashboardFilters,
+  OperationalDashboardResponse,
+  SlaAlertsFilters,
+  SlaAlertsResponse,
+} from '../models/monitoring.model';
 import { TallerResponse } from '@core/models/workshops.model';
 import { IncidentDetailResponse } from '@core/models/emergencies.model';
 
@@ -50,17 +59,45 @@ export class MonitoringService {
     );
   }
 
-  /**
-   * CU24: Consultar bitácora de auditoría con filtros y paginación
-   */
-  getAuditLogs(filters: Record<string, string | number> = {}): Observable<AuditLog[]> {
+  getOperationalDashboard(
+    filters: OperationalDashboardFilters = {},
+  ): Observable<OperationalDashboardResponse> {
     let params = new HttpParams();
     for (const [key, value] of Object.entries(filters)) {
       if (value !== '' && value !== null && value !== undefined) {
         params = params.set(key, String(value));
       }
     }
-    return this.http.get<AuditLog[]>(`${this.auditUrl}/logs`, { params });
+    return this.http.get<OperationalDashboardResponse>(
+      `${this.monitoringUrl}/operational/dashboard`,
+      { params }
+    );
+  }
+
+  getSlaAlerts(filters: SlaAlertsFilters = {}): Observable<SlaAlertsResponse> {
+    let params = new HttpParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== '' && value !== null && value !== undefined) {
+        params = params.set(key, String(value));
+      }
+    }
+    return this.http.get<SlaAlertsResponse>(
+      `${this.monitoringUrl}/operational/sla-alerts`,
+      { params }
+    );
+  }
+
+  /**
+   * CU24: Consultar bitácora de auditoría con filtros y paginación
+   */
+  getAuditLogs(filters: AuditLogFilters = {}): Observable<AuditLogPage> {
+    let params = new HttpParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== '' && value !== null && value !== undefined) {
+        params = params.set(key, String(value));
+      }
+    }
+    return this.http.get<AuditLogPage>(`${this.auditUrl}/logs`, { params });
   }
 
   /**

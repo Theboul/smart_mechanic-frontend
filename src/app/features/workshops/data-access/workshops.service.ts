@@ -105,6 +105,10 @@ export class WorkshopsService {
     return this.http.get<SucursalResponse[]>(`${this.API_URL}/me/branches`);
   }
 
+  getBranchesByWorkshop(workshopId: string): Observable<SucursalResponse[]> {
+    return this.http.get<SucursalResponse[]>(`${this.API_URL}/${workshopId}/branches`);
+  }
+
   createBranch(data: SucursalCreate): Observable<SucursalResponse> {
     return this.http.post<SucursalResponse>(`${this.API_URL}/me/branches`, data);
   }

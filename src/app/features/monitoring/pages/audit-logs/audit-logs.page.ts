@@ -1,321 +1,535 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { Component, computed, effect, inject, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MonitoringService } from '../../data-access/monitoring.service';
 import { injectQuery } from '@tanstack/angular-query-experimental';
 import { lastValueFrom } from 'rxjs';
 import { MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
-import { LucideAngularModule, ShieldCheck, User, Globe, Clock, Terminal, Filter, RefreshCw, Search, Calendar, Eye, Download } from 'lucide-angular';
-import { PageHeaderComponent, LoadingStateComponent, EmptyStateComponent } from '@shared/ui';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import {
+  LucideAngularModule,
+  Building2,
+  Clock3,
+  Filter,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-angular';
 
-/** Mapa de rutas API → etiqueta legible */
-const ACTION_LABELS: Record<string, { label: string; color: string }> = {
-  'POST /api/v1/identity/auth/login':    { label: 'Login',           color: 'green'  },
-  'POST /api/v1/identity/auth/register': { label: 'Registro',        color: 'blue'   },
-  'POST /api/v1/workshops':              { label: 'Crear Taller',     color: 'purple' },
-  'PATCH /api/v1/workshops':             { label: 'Editar Taller',    color: 'orange' },
-  'DELETE /api/v1/workshops':            { label: 'Eliminar Taller',  color: 'red'    },
-  'POST /api/v1/emergencies':            { label: 'Nueva Emergencia', color: 'red'    },
-  'PATCH /api/v1/emergencies':           { label: 'Actualizar Incidente', color: 'orange' },
-  'POST /api/v1/identity/users':         { label: 'Crear Usuario',    color: 'blue'   },
+import { AuthStore } from '@features/identity/auth/state/auth.store';
+import { WorkshopsService } from '@features/workshops/data-access/workshops.service';
+import { SucursalResponse, TallerResponse } from '@core/models/workshops.model';
+import {
+  EmptyStateComponent,
+  LoadingStateComponent,
+  PageHeaderComponent,
+  SearchInputComponent,
+  SelectComponent,
+  SelectOption,
+} from '@shared/ui';
+import { MonitoringService } from '../../data-access/monitoring.service';
+import { AuditLog, AuditLogFilters, AuditLogPage } from '../../models/monitoring.model';
+
+const ACTION_OPTIONS: SelectOption[] = [
+  { value: '', label: 'Todas las acciones' },
+  { value: 'login', label: 'Login' },
+  { value: 'POST', label: 'Creacion' },
+  { value: 'PATCH', label: 'Actualizacion' },
+  { value: 'PUT', label: 'Edicion' },
+  { value: 'DELETE', label: 'Eliminacion' },
+  { value: 'workshops', label: 'Talleres' },
+  { value: 'users', label: 'Usuarios' },
+  { value: 'emergencies', label: 'Emergencias' },
+  { value: 'quotations', label: 'Cotizaciones' },
+  { value: 'scheduling', label: 'Citas' },
+];
+
+const ACTION_LABELS: Record<string, { label: string; tone: string }> = {
+  login: { label: 'Login', tone: 'green' },
+  POST: { label: 'Creacion', tone: 'blue' },
+  PUT: { label: 'Edicion', tone: 'orange' },
+  PATCH: { label: 'Actualizacion', tone: 'orange' },
+  DELETE: { label: 'Eliminacion', tone: 'red' },
 };
-
-function resolveActionBadge(accion: string): { label: string; color: string } {
-  // Buscar coincidencia exacta o parcial
-  for (const key of Object.keys(ACTION_LABELS)) {
-    if (accion.includes(key) || key.includes(accion)) {
-      return ACTION_LABELS[key];
-    }
-  }
-  // Fallback: extraer método HTTP si lo tiene
-  const match = accion.match(/^(GET|POST|PUT|PATCH|DELETE)\s/);
-  if (match) {
-    const colors: Record<string, string> = { GET: 'gray', POST: 'blue', PUT: 'orange', PATCH: 'orange', DELETE: 'red' };
-    return { label: accion.replace(/^(GET|POST|PUT|PATCH|DELETE)\s\/api\/v1\//, '').split('/')[0], color: colors[match[1]] ?? 'gray' };
-  }
-  return { label: accion, color: 'gray' };
-}
 
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  providers: [DatePipe],
   imports: [
     CommonModule,
     FormsModule,
     MatTableModule,
     MatCardModule,
-    MatPaginatorModule,
     MatFormFieldModule,
     MatInputModule,
-    MatSelectModule,
-    MatIconModule,
     MatButtonModule,
+    MatPaginatorModule,
     LucideAngularModule,
     PageHeaderComponent,
     LoadingStateComponent,
-    EmptyStateComponent
+    EmptyStateComponent,
+    SearchInputComponent,
+    SelectComponent,
   ],
   template: `
     <div class="page-container">
-      <app-page-header 
-        title="Bitácora de Auditoría" 
-        subtitle="Registro histórico de acciones críticas y eventos de seguridad del sistema."
+      <app-page-header
+        title="Bitacora de Auditoria"
+        subtitle="Registro historico de acciones criticas, eventos de seguridad y cambios operativos del sistema."
         [icon]="shieldIcon">
-        <div actions>
-          <button mat-stroked-button class="refresh-btn" (click)="logsQuery.refetch()">
+        <div actions class="header-actions">
+          @if (logsQuery.isFetching() && logsQuery.data()) {
+            <span class="sync-indicator">
+              <span class="sync-dot"></span>
+              Actualizando
+            </span>
+          }
+          <span class="scope-badge sm-glass-card">{{ scopeLabel() }}</span>
+          <button mat-stroked-button class="secondary-btn" (click)="logsQuery.refetch()">
             <lucide-icon [img]="refreshIcon" [size]="16"></lucide-icon>
             Actualizar
+          </button>
+          <button mat-button class="clear-btn" (click)="clearFilters()">
+            Limpiar filtros
           </button>
         </div>
       </app-page-header>
 
-      <!-- Filtros -->
-      <div class="filters-bar sm-glass-card">
+      <div class="filters-container sm-glass-card">
         <div class="filter-title">
           <lucide-icon [img]="filterIcon" [size]="16"></lucide-icon>
           <span>Filtros</span>
         </div>
 
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Buscar usuario</mat-label>
-          <input matInput [ngModel]="filterUsuario()" (ngModelChange)="filterUsuario.set($event); onFilterChange()" placeholder="Nombre del usuario..." />
-          <lucide-icon [img]="searchIcon" [size]="16" matSuffix></lucide-icon>
-        </mat-form-field>
+        <app-search-input
+          class="search-field"
+          [value]="filterUsuario()"
+          (valueChange)="onUserSearchChange($event)"
+          placeholder="Buscar usuario">
+        </app-search-input>
 
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Tipo de acción</mat-label>
-          <mat-select [ngModel]="filterAccion()" (ngModelChange)="filterAccion.set($event); onFilterChange()">
-            <mat-option value="">Todas</mat-option>
-            <mat-option value="login">Login</mat-option>
-            <mat-option value="register">Registro</mat-option>
-            <mat-option value="emergencies">Emergencias</mat-option>
-            <mat-option value="workshops">Talleres</mat-option>
-            <mat-option value="users">Usuarios</mat-option>
-          </mat-select>
-        </mat-form-field>
+        <app-select
+          class="sm-select"
+          [value]="filterAccion()"
+          (valueChange)="onActionChange($event)"
+          placeholder="Todas las acciones"
+          [options]="actionOptions">
+        </app-select>
 
-        <mat-form-field appearance="outline" class="date-filter">
-          <mat-label>Fecha desde</mat-label>
-          <input matInput type="date" [ngModel]="filterFechaInicio()" (ngModelChange)="filterFechaInicio.set($event); onFilterChange()" />
-        </mat-form-field>
+        @if (isSuperAdmin()) {
+          <app-select
+            class="sm-select"
+            [value]="filterWorkshop()"
+            (valueChange)="onWorkshopChange($event)"
+            placeholder="Todos los talleres"
+            [options]="workshopOptions()">
+          </app-select>
 
-        <mat-form-field appearance="outline" class="date-filter">
-          <mat-label>Fecha hasta</mat-label>
-          <input matInput type="date" [ngModel]="filterFechaFin()" (ngModelChange)="filterFechaFin.set($event); onFilterChange()" />
-        </mat-form-field>
+          @if (filterWorkshop()) {
+            <app-select
+              class="sm-select"
+              [value]="filterBranch()"
+              (valueChange)="onBranchChange($event)"
+              placeholder="Todas las sucursales"
+              [options]="branchOptions()">
+            </app-select>
+          }
+        }
 
-        <button mat-button class="clear-btn" (click)="clearFilters()">Limpiar</button>
+        @if (isOwner()) {
+            <app-select
+              class="sm-select"
+              [value]="filterBranch()"
+              (valueChange)="onBranchChange($event)"
+              placeholder="Todas las sucursales"
+              [options]="branchOptions()">
+            </app-select>
+        } @else if (isAdminSucursal()) {
+          <span class="fixed-context sm-glass-card">Sucursal actual: {{ myBranchName() }}</span>
+        }
+
+        <div class="date-filter-group">
+          <span class="date-label">Desde</span>
+            <mat-form-field appearance="outline" class="sm-capsule-field date-field" subscriptSizing="dynamic">
+              <input matInput type="date" [ngModel]="filterFechaInicio()" (ngModelChange)="onDateFromChange($event)" />
+            </mat-form-field>
+          </div>
+
+        <div class="date-filter-group">
+          <span class="date-label">Hasta</span>
+            <mat-form-field appearance="outline" class="sm-capsule-field date-field" subscriptSizing="dynamic">
+              <input matInput type="date" [ngModel]="filterFechaFin()" (ngModelChange)="onDateToChange($event)" />
+            </mat-form-field>
+          </div>
       </div>
 
       @if (logsQuery.isLoading()) {
-        <app-loading-state message="Consultando bitácora de seguridad..."></app-loading-state>
+        <app-loading-state message="Consultando bitacora de auditoria..."></app-loading-state>
       } @else if (logsQuery.isError()) {
         <div class="error-state sm-glass-card">
-          <p>❌ No se pudo cargar la bitácora. Verifica tu conexión con el servidor.</p>
+          <h3>No fue posible cargar la bitacora de auditoria.</h3>
+          <button mat-stroked-button class="secondary-btn" (click)="logsQuery.refetch()">
+            <lucide-icon [img]="refreshIcon" [size]="16"></lucide-icon>
+            Reintentar
+          </button>
         </div>
-      } @else {
-        <mat-card class="table-card sm-glass-card">
-          <div class="audit-header">
-            <lucide-icon [img]="shieldIcon" [size]="20"></lucide-icon>
-            <h3>Historial de Operaciones</h3>
-            <span class="total-badge">{{ logsQuery.data()?.length || 0 }} registros</span>
-          </div>
-
-          <table mat-table [dataSource]="logsQuery.data() || []" class="modern-table">
-
-            <!-- Usuario -->
-            <ng-container matColumnDef="usuario">
-              <th mat-header-cell *matHeaderCellDef>Usuario</th>
-              <td mat-cell *matCellDef="let log">
-                <div class="user-cell">
-                  <div class="avatar">{{ (log.nombre_usuario || 'S')[0].toUpperCase() }}</div>
-                  <span>{{ log.nombre_usuario || 'Sistema' }}</span>
-                </div>
-              </td>
-            </ng-container>
-
-            <!-- Acción -->
-            <ng-container matColumnDef="accion">
-              <th mat-header-cell *matHeaderCellDef>Acción</th>
-              <td mat-cell *matCellDef="let log">
-                <span class="action-badge" [class]="'badge-' + getActionBadge(log.accion).color">
-                  {{ getActionBadge(log.accion).label }}
-                </span>
-              </td>
-            </ng-container>
-
-            <!-- Descripción -->
-            <ng-container matColumnDef="descripcion">
-              <th mat-header-cell *matHeaderCellDef>Descripción</th>
-              <td mat-cell *matCellDef="let log">
-                <span class="desc-text">{{ log.descripcion || '—' }}</span>
-              </td>
-            </ng-container>
-
-            <!-- IP -->
-            <ng-container matColumnDef="ip">
-              <th mat-header-cell *matHeaderCellDef>IP</th>
-              <td mat-cell *matCellDef="let log">
-                <div class="ip-cell">
-                  <lucide-icon [img]="globeIcon" [size]="12"></lucide-icon>
-                  <code>{{ log.ip }}</code>
-                </div>
-              </td>
-            </ng-container>
-
-            <!-- Fecha -->
-            <ng-container matColumnDef="fecha">
-              <th mat-header-cell *matHeaderCellDef>Fecha (BOL)</th>
-              <td mat-cell *matCellDef="let log">
-                <div class="date-cell">
-                  <lucide-icon [img]="clockIcon" [size]="12"></lucide-icon>
-                  <span>{{ log.fecha_hora | date:'dd/MM/yyyy HH:mm:ss' : '-0400' }}</span>
-                </div>
-              </td>
-            </ng-container>
-
-            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
-          </table>
-
-          @if ((logsQuery.data() || []).length === 0) {
-            <app-empty-state 
-              [icon]="shieldIcon" 
-              title="Sin registros" 
-              message="No se encontraron eventos de auditoría para los filtros aplicados.">
+      } @else if (logsPage(); as pageData) {
+        @if (pageData.items.length === 0) {
+          <div class="empty-wrapper sm-glass-card">
+            <app-empty-state
+              [icon]="shieldIcon"
+              title="No hay eventos de auditoria para los filtros seleccionados."
+              message="Ajusta la busqueda o las fechas para consultar otra ventana de actividad.">
             </app-empty-state>
-          }
+          </div>
+        } @else {
+          <mat-card class="table-card sm-glass-card">
+            <div class="table-header">
+              <div class="title-with-icon">
+                <lucide-icon [img]="shieldIcon" [size]="18"></lucide-icon>
+                <h3>Eventos de Auditoria</h3>
+              </div>
+              <span class="count-badge">{{ pageData.total }} registros</span>
+            </div>
 
-          <!-- Paginación -->
-          <mat-paginator
-            [length]="logsQuery.data()?.length || 0"
-            [pageSize]="pageSize()"
-            [pageSizeOptions]="[10, 20, 50]"
-            (page)="onPageChange($event)"
-            aria-label="Página de bitácora">
-          </mat-paginator>
-        </mat-card>
+            <table mat-table [dataSource]="pageData.items" class="audit-table">
+              <ng-container matColumnDef="fecha">
+                <th mat-header-cell *matHeaderCellDef>Fecha</th>
+                <td mat-cell *matCellDef="let log">
+                  <div class="date-cell">
+                    <lucide-icon [img]="clockIcon" [size]="13"></lucide-icon>
+                    <span>{{ log.fecha_hora | date:'dd/MM/yyyy HH:mm:ss' : '-0400' }}</span>
+                  </div>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="usuario">
+                <th mat-header-cell *matHeaderCellDef>Usuario</th>
+                <td mat-cell *matCellDef="let log">
+                  <div class="user-cell">
+                    <div class="avatar">{{ getUserInitial(log) }}</div>
+                    <div class="user-meta">
+                      <strong>{{ log.nombre_usuario || 'No disponible' }}</strong>
+                      <span>{{ log.rol_usuario || 'Sin rol' }}</span>
+                    </div>
+                  </div>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="accion">
+                <th mat-header-cell *matHeaderCellDef>Accion</th>
+                <td mat-cell *matCellDef="let log">
+                  <span class="action-badge" [class]="'badge-' + getActionBadge(log).tone">
+                    {{ getActionBadge(log).label }}
+                  </span>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="entidad">
+                <th mat-header-cell *matHeaderCellDef>Entidad</th>
+                <td mat-cell *matCellDef="let log">
+                  <div class="entity-cell">
+                    <lucide-icon [img]="buildingIcon" [size]="13"></lucide-icon>
+                    <span>{{ log.tipo_entidad || inferEntity(log.accion) }}</span>
+                  </div>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="alcance">
+                <th mat-header-cell *matHeaderCellDef>Alcance</th>
+                <td mat-cell *matCellDef="let log">
+                  <div class="scope-cell">
+                    <strong>{{ log.taller_nombre || 'No disponible' }}</strong>
+                    <span>{{ log.sucursal_nombre || 'Sin sucursal' }}</span>
+                  </div>
+                </td>
+              </ng-container>
+
+              <ng-container matColumnDef="detalle">
+                <th mat-header-cell *matHeaderCellDef>Detalle</th>
+                <td mat-cell *matCellDef="let log">
+                  <div class="detail-cell">
+                    <p>{{ log.descripcion || 'No disponible' }}</p>
+                    <small>IP: {{ log.ip || 'No disponible' }}</small>
+                  </div>
+                </td>
+              </ng-container>
+
+              <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: displayedColumns;" class="table-row"></tr>
+            </table>
+
+            <mat-paginator
+              [length]="pageData.total"
+              [pageIndex]="pageIndex()"
+              [pageSize]="pageSize()"
+              [pageSizeOptions]="[10, 20, 50]"
+              (page)="onPageChange($event)"
+              aria-label="Paginacion de bitacora">
+            </mat-paginator>
+          </mat-card>
+        }
       }
     </div>
   `,
   styles: [`
-    .page-container { padding: 2rem; max-width: 1300px; margin: 0 auto; animation: fadeIn 0.4s ease-out; }
-
-    .refresh-btn {
-      display: flex; align-items: center; gap: 0.5rem;
-      border-color: rgba(var(--sm-rgb-sapphire-400), 0.3);
-      color: var(--sm-color-sapphire-400);
+    .page-container { padding: 2rem; max-width: 1400px; margin: 0 auto; }
+    .header-actions { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .sync-indicator {
+      display: inline-flex; align-items: center; gap: 0.45rem; color: var(--sm-color-sapphire-400);
+      font-size: 0.78rem; font-weight: 700;
     }
-
-    /* Filtros */
-    .filters-bar {
-      display: flex; flex-wrap: wrap; align-items: center; gap: 1rem;
-      padding: 1.25rem 1.5rem; margin-bottom: 1.5rem;
-      .filter-title { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; font-weight: 600; color: var(--sm-color-sapphire-400); text-transform: uppercase; white-space: nowrap; }
+    .sync-dot {
+      width: 0.5rem; height: 0.5rem; border-radius: 999px; background: var(--sm-color-sapphire-400);
+      box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0.45); animation: pulse 1.6s infinite;
     }
-
-    .filter-field { flex: 1; min-width: 200px; max-width: 300px; }
-    .date-filter { flex: 0.5; min-width: 150px; max-width: 200px; }
-
-    .clear-btn { color: var(--sm-color-sapphire-400); font-size: 0.8rem; font-weight: 600; &:hover { color: var(--sm-color-sapphire-300); } }
-
-    /* Tabla */
-    .table-card { border: none; padding: 0; }
-
-    .audit-header {
-      display: flex; align-items: center; gap: 0.75rem; padding: 1.25rem 1.5rem;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      color: var(--sm-color-sapphire-400);
-      h3 { margin: 0; font-size: 1rem; color: var(--sm-color-text-title); }
-      .total-badge { margin-left: auto; font-size: 0.75rem; padding: 0.2rem 0.6rem; background: rgba(var(--sm-rgb-sapphire-400), 0.15); color: var(--sm-color-sapphire-300); border-radius: 20px; }
+    .scope-badge, .fixed-context {
+      padding: 0.45rem 0.8rem; border-radius: 999px; color: var(--sm-color-sapphire-400);
+      font-size: 0.78rem; font-weight: 700;
     }
-
-    .modern-table {
+    .secondary-btn { display: inline-flex; align-items: center; gap: 0.45rem; }
+    .clear-btn { color: var(--sm-color-text-muted); font-weight: 700; }
+    .filters-container {
+      display: flex; gap: 0.85rem; flex-wrap: wrap; align-items: center;
+      padding: 1.2rem 1.5rem; margin-bottom: 1.5rem;
+    }
+    .filter-title {
+      display: inline-flex; align-items: center; gap: 0.45rem; color: var(--sm-color-sapphire-400);
+      font-size: 0.78rem; font-weight: 700; text-transform: uppercase;
+    }
+    .search-field { width: min(240px, 100%); }
+    .sm-select { width: 170px; }
+    .date-filter-group { display: flex; align-items: center; gap: 0.55rem; }
+    .date-label {
+      font-size: 0.72rem; color: var(--sm-color-text-muted); font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .date-field { width: 160px; }
+    .error-state {
+      padding: 2rem; text-align: center; color: #e74c3c; display: flex; flex-direction: column;
+      gap: 0.85rem; align-items: center;
+    }
+    .error-state h3 { margin: 0; }
+    .empty-wrapper { padding: 1rem; }
+    .table-card { padding: 0; border: none; overflow: hidden; }
+    .table-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: 1.2rem 1.4rem; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .title-with-icon { display: flex; align-items: center; gap: 0.7rem; color: var(--sm-color-sapphire-400); }
+    .title-with-icon h3 { margin: 0; color: white; font-size: 1rem; }
+    .count-badge {
+      background: rgba(var(--sm-rgb-sapphire-400), 0.15); color: var(--sm-color-sapphire-300);
+      padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+    }
+    .audit-table {
       width: 100%; background: transparent;
-      th { color: var(--sm-color-text-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
-      td { padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
     }
-
+    .audit-table th {
+      color: var(--sm-color-text-muted); font-size: 0.7rem; text-transform: uppercase;
+      letter-spacing: 0.05em; padding: 0.75rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .audit-table td {
+      padding: 0.9rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.03); vertical-align: top;
+    }
     .table-row:hover td { background: rgba(var(--sm-rgb-sapphire-500), 0.05); }
-
-    .user-cell { display: flex; align-items: center; gap: 0.6rem; font-size: 0.875rem; }
-    .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--sm-color-sapphire-700); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
-
-    /* Badges de acción */
-    .action-badge { padding: 0.2rem 0.65rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
-    .badge-green  { background: rgba(46, 204, 113, 0.15); color: #2ecc71; }
-    .badge-blue   { background: rgba(52, 152, 219, 0.15); color: #3498db; }
-    .badge-purple { background: rgba(155, 89, 182, 0.15); color: #9b59b6; }
-    .badge-orange { background: rgba(230, 126, 34, 0.15); color: #e67e22; }
-    .badge-red    { background: rgba(231, 76, 60, 0.15);  color: #e74c3c; }
-    .badge-gray   { background: rgba(var(--sm-rgb-slate-400), 0.1); color: var(--sm-color-text-soft); }
-
-    .desc-text { font-size: 0.82rem; color: var(--sm-color-text-soft); }
-
-    .ip-cell, .date-cell { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--sm-color-text-soft); }
-    code { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; }
-
-    .error-state { padding: 3rem; text-align: center; color: #e74c3c; }
-
-    mat-paginator { background: transparent; }
-
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .spinner { width: 40px; height: 40px; border: 3px solid rgba(var(--sm-rgb-sapphire-400), 0.2); border-top: 3px solid var(--sm-color-sapphire-400); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  `]
+    .date-cell, .entity-cell {
+      display: inline-flex; align-items: center; gap: 0.5rem; color: var(--sm-color-text-soft);
+      font-size: 0.82rem;
+    }
+    .user-cell { display: flex; align-items: center; gap: 0.7rem; }
+    .avatar {
+      width: 30px; height: 30px; border-radius: 999px; display: flex; align-items: center; justify-content: center;
+      background: rgba(var(--sm-rgb-sapphire-400), 0.15); color: var(--sm-color-sapphire-300); font-weight: 800;
+      flex-shrink: 0;
+    }
+    .user-meta { display: flex; flex-direction: column; gap: 0.18rem; }
+    .user-meta strong { color: white; font-size: 0.86rem; }
+    .user-meta span { color: var(--sm-color-text-muted); font-size: 0.78rem; }
+    .action-badge {
+      display: inline-flex; padding: 0.22rem 0.65rem; border-radius: 999px; font-size: 0.72rem;
+      font-weight: 700; letter-spacing: 0.03em;
+    }
+    .badge-green { background: rgba(46, 204, 113, 0.14); color: #2ecc71; }
+    .badge-blue { background: rgba(52, 152, 219, 0.14); color: #3498db; }
+    .badge-orange { background: rgba(243, 156, 18, 0.14); color: #f39c12; }
+    .badge-red { background: rgba(231, 76, 60, 0.14); color: #e74c3c; }
+    .badge-gray { background: rgba(148, 163, 184, 0.14); color: #cbd5e1; }
+    .scope-cell { display: flex; flex-direction: column; gap: 0.22rem; }
+    .scope-cell strong { color: white; font-size: 0.84rem; }
+    .scope-cell span { color: var(--sm-color-text-muted); font-size: 0.78rem; }
+    .detail-cell { display: flex; flex-direction: column; gap: 0.25rem; }
+    .detail-cell p, .detail-cell small { margin: 0; }
+    .detail-cell p { color: var(--sm-color-text-soft); font-size: 0.82rem; }
+    .detail-cell small { color: var(--sm-color-text-muted); font-size: 0.76rem; }
+    @media (max-width: 1100px) {
+      .audit-table { display: block; overflow-x: auto; }
+    }
+    @media (max-width: 900px) {
+      .date-filter-group { width: 100%; justify-content: space-between; }
+      .date-field { width: min(220px, 100%); }
+      .search-field, .sm-select { width: 100%; }
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0.45); }
+      70% { box-shadow: 0 0 0 10px rgba(var(--sm-rgb-sapphire-400), 0); }
+      100% { box-shadow: 0 0 0 0 rgba(var(--sm-rgb-sapphire-400), 0); }
+    }
+  `],
 })
 export class AuditLogsPage {
   private monitoringService = inject(MonitoringService);
+  private workshopsService = inject(WorkshopsService);
+  private authStore = inject(AuthStore);
+  private readonly systemAdminRoles = new Set(['superadmin', 'admin_sistema', 'root']);
 
-  readonly shieldIcon  = ShieldCheck;
-  readonly userIcon    = User;
-  readonly globeIcon   = Globe;
-  readonly clockIcon   = Clock;
-  readonly actionIcon  = Terminal;
-  readonly filterIcon  = Filter;
+  readonly shieldIcon = ShieldCheck;
+  readonly buildingIcon = Building2;
+  readonly clockIcon = Clock3;
+  readonly filterIcon = Filter;
   readonly refreshIcon = RefreshCw;
-  readonly searchIcon  = Search;
 
-  displayedColumns = ['usuario', 'accion', 'descripcion', 'ip', 'fecha'];
+  readonly displayedColumns = ['fecha', 'usuario', 'accion', 'entidad', 'alcance', 'detalle'];
+  readonly actionOptions = ACTION_OPTIONS;
 
-  // Estado de filtros (Signals para reactividad)
-  filterUsuario    = signal('');
-  filterAccion     = signal('');
-  filterFechaInicio = signal('');
-  filterFechaFin   = signal('');
-  pageSize         = signal(20);
-  pageIndex        = signal(0);
+  readonly workshops = signal<TallerResponse[]>([]);
+  readonly branches = signal<SucursalResponse[]>([]);
+  readonly myBranchName = signal('Sin sucursal asignada');
 
-  // Params reactivos para la query
-  private queryParams = signal<Record<string, string | number>>({});
+  readonly filterUsuario = signal('');
+  readonly filterAccion = signal('');
+  readonly filterFechaInicio = signal('');
+  readonly filterFechaFin = signal('');
+  readonly filterWorkshop = signal('');
+  readonly filterBranch = signal('');
+  readonly pageIndex = signal(0);
+  readonly pageSize = signal(20);
 
-  logsQuery = injectQuery(() => ({
-    queryKey: ['audit-logs', this.queryParams()],
-    queryFn: () => lastValueFrom(
-      this.monitoringService.getAuditLogs(this.queryParams())
-    )
+  readonly isSuperAdmin = computed(() => {
+    const role = this.authStore.user()?.rol_nombre?.toLowerCase().trim() ?? '';
+    return this.systemAdminRoles.has(role);
+  });
+  readonly isOwner = computed(() => {
+    const user = this.authStore.user();
+    return user?.rol_nombre === 'admin_taller' && user?.rol_contexto === 'owner';
+  });
+  readonly isAdminSucursal = computed(() => {
+    const user = this.authStore.user();
+    return user?.rol_nombre === 'admin_taller' && user?.rol_contexto === 'admin_sucursal';
+  });
+
+  readonly workshopOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Todos los talleres' },
+    ...this.workshops().map(workshop => ({
+      value: workshop.id_taller,
+      label: workshop.nombre,
+    })),
+  ]);
+
+  readonly branchOptions = computed<SelectOption[]>(() => [
+    { value: '', label: 'Todas las sucursales' },
+    ...this.branches().map(branch => ({
+      value: branch.id_sucursal,
+      label: branch.nombre,
+    })),
+  ]);
+
+  readonly filters = computed<AuditLogFilters>(() => ({
+    usuario_nombre: this.filterUsuario() || undefined,
+    accion: this.filterAccion() || undefined,
+    fecha_inicio: this.filterFechaInicio() || undefined,
+    fecha_fin: this.filterFechaFin() || undefined,
+    id_taller: this.isSuperAdmin() ? this.filterWorkshop() || undefined : undefined,
+    id_sucursal: (this.isOwner() || this.isSuperAdmin()) ? this.filterBranch() || undefined : undefined,
+    page: this.pageIndex() + 1,
+    page_size: this.pageSize(),
   }));
 
-  getActionBadge(accion: string) {
-    return resolveActionBadge(accion);
+  readonly filtersKey = computed(() => JSON.stringify(this.filters()));
+  readonly filterStateKey = computed(() => JSON.stringify({
+    usuario_nombre: this.filterUsuario(),
+    accion: this.filterAccion(),
+    fecha_inicio: this.filterFechaInicio(),
+    fecha_fin: this.filterFechaFin(),
+    id_taller: this.filterWorkshop(),
+    id_sucursal: this.filterBranch(),
+  }));
+
+  logsQuery = injectQuery<AuditLogPage>(() => ({
+    queryKey: ['audit-logs', this.filtersKey()],
+    queryFn: () => lastValueFrom(this.monitoringService.getAuditLogs(this.filters())),
+  }));
+
+  readonly logsPage = computed(() => this.logsQuery.data());
+
+  readonly scopeLabel = computed(() => {
+    if (this.isSuperAdmin()) {
+      return this.filterWorkshop() ? 'Vista filtrada por taller' : 'Vista global';
+    }
+    if (this.isOwner()) {
+      return this.filterBranch() ? 'Owner - sucursal filtrada' : 'Owner - taller completo';
+    }
+    return `Sucursal fija - ${this.myBranchName()}`;
+  });
+
+  constructor() {
+    if (this.isSuperAdmin()) {
+      this.workshopsService.getAllWorkshops().subscribe({
+        next: workshops => this.workshops.set(workshops ?? []),
+      });
+    } else if (this.isOwner()) {
+      this.workshopsService.getBranches().subscribe({
+        next: branches => this.branches.set(branches ?? []),
+      });
+    } else if (this.isAdminSucursal()) {
+      this.workshopsService.getMyBranch().subscribe({
+        next: branch => {
+          if (branch) {
+            this.myBranchName.set(branch.nombre);
+          }
+        },
+      });
+    }
+
+    effect(() => {
+      this.filterStateKey();
+      this.pageIndex.set(0);
+    });
   }
 
-  onFilterChange() {
+  onWorkshopChange(value: string) {
+    this.filterWorkshop.set(value);
+    this.filterBranch.set('');
     this.pageIndex.set(0);
-    this.applyFilters();
+    if (!value) {
+      this.branches.set([]);
+      return;
+    }
+    this.workshopsService.getBranchesByWorkshop(value).subscribe({
+      next: branches => this.branches.set(branches ?? []),
+    });
   }
 
-  onPageChange(event: PageEvent) {
-    this.pageIndex.set(event.pageIndex);
-    this.pageSize.set(event.pageSize);
-    this.applyFilters();
+  onBranchChange(value: string) {
+    this.filterBranch.set(value);
+  }
+
+  onUserSearchChange(value: string) {
+    this.filterUsuario.set(value);
+  }
+
+  onActionChange(value: string) {
+    this.filterAccion.set(value);
+  }
+
+  onDateFromChange(value: string) {
+    this.filterFechaInicio.set(value);
+  }
+
+  onDateToChange(value: string) {
+    this.filterFechaFin.set(value);
   }
 
   clearFilters() {
@@ -323,23 +537,39 @@ export class AuditLogsPage {
     this.filterAccion.set('');
     this.filterFechaInicio.set('');
     this.filterFechaFin.set('');
+    this.filterWorkshop.set('');
+    this.filterBranch.set('');
     this.pageIndex.set(0);
-    this.applyFilters();
+    this.pageSize.set(20);
+    if (this.isSuperAdmin()) {
+      this.branches.set([]);
+    }
   }
 
-  refresh() {
-    this.applyFilters();
+  onPageChange(event: PageEvent) {
+    this.pageIndex.set(event.pageIndex);
+    this.pageSize.set(event.pageSize);
   }
 
-  private applyFilters() {
-    const params: Record<string, string | number> = {
-      page: this.pageIndex(),
-      size: this.pageSize(),
-    };
-    if (this.filterUsuario())     params['usuario_nombre'] = this.filterUsuario();
-    if (this.filterAccion())      params['accion']         = this.filterAccion();
-    if (this.filterFechaInicio()) params['fecha_inicio']   = this.filterFechaInicio();
-    if (this.filterFechaFin())    params['fecha_fin']      = this.filterFechaFin();
-    this.queryParams.set(params);
+  getUserInitial(log: AuditLog): string {
+    return (log.nombre_usuario || 'S').charAt(0).toUpperCase();
+  }
+
+  getActionBadge(log: AuditLog): { label: string; tone: string } {
+    const normalized = log.accion.toUpperCase();
+    const match = Object.entries(ACTION_LABELS).find(([key]) => normalized.includes(key.toUpperCase()));
+    if (match) return match[1];
+    return { label: this.inferEntity(log.accion), tone: 'gray' };
+  }
+
+  inferEntity(action: string): string {
+    const normalized = action.toLowerCase();
+    if (normalized.includes('emerg')) return 'Emergencias';
+    if (normalized.includes('workshop')) return 'Talleres';
+    if (normalized.includes('user')) return 'Usuarios';
+    if (normalized.includes('quotation')) return 'Cotizaciones';
+    if (normalized.includes('schedul')) return 'Citas';
+    if (normalized.includes('identity')) return 'Identidad';
+    return 'Sistema';
   }
 }
