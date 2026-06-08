@@ -1,6 +1,31 @@
 const fs = require('fs');
 const path = require('path');
 
+function normalizeUrl(value, { defaultValue = '', ensureApiV1 = false } = {}) {
+  const raw = (value || '').trim();
+  if (!raw) return defaultValue;
+
+  if (raw.startsWith('/')) {
+    return raw.replace(/\/+$/, '') || '/';
+  }
+
+  let normalized = raw;
+  if (!/^https?:\/\//i.test(normalized)) {
+    const isLocalHost =
+      normalized.startsWith('localhost') ||
+      normalized.startsWith('127.0.0.1');
+    normalized = `${isLocalHost ? 'http' : 'https'}://${normalized}`;
+  }
+
+  normalized = normalized.replace(/\/+$/, '');
+
+  if (ensureApiV1 && !/\/api\/v1$/i.test(normalized)) {
+    normalized = `${normalized}/api/v1`;
+  }
+
+  return normalized;
+}
+
 // Intentar cargar variables desde .env si existe (para local)
 const envPath = path.join(__dirname, '../.env');
 if (fs.existsSync(envPath)) {
@@ -13,9 +38,18 @@ if (fs.existsSync(envPath)) {
   });
 }
 
+const apiUrl = normalizeUrl(process.env.API_URL, {
+  defaultValue: 'http://localhost:8000/api/v1',
+  ensureApiV1: true,
+});
+
+const aiReportUrl = normalizeUrl(process.env.AI_REPORT_URL, {
+  defaultValue: '/ai-report',
+});
+
 const envConfig = {
-  apiUrl: process.env.API_URL || 'http://localhost:8000/api/v1',
-  aiReportUrl: process.env.AI_REPORT_URL || '',
+  apiUrl,
+  aiReportUrl,
   firebase: {
     apiKey: process.env.FIREBASE_API_KEY || '',
     authDomain: process.env.FIREBASE_AUTH_DOMAIN || '',
@@ -27,6 +61,14 @@ const envConfig = {
   vapidKey: process.env.VAPID_KEY || '',
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || ''
 };
+
+if (!process.env.API_URL) {
+  console.warn('WARNING: API_URL no esta configurada. Se usara http://localhost:8000/api/v1.');
+}
+
+if (!process.env.AI_REPORT_URL) {
+  console.warn('WARNING: AI_REPORT_URL no esta configurada. Se usara /ai-report para desarrollo local.');
+}
 
 // 1. Generar src/assets/env.js
 const envJsPath = path.join(__dirname, '../src/assets/env.js');
