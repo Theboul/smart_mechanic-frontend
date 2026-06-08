@@ -1,7 +1,7 @@
 (function (global) {
   global.__env = {
     apiUrl: "",
-    aiReportUrl: "",
+    aiReportUrl: "/ai-report",
     firebase: {
       apiKey: "",
       authDomain: "",

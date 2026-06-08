@@ -1,70 +1,66 @@
-/**
- * Modelos específicos del paquete admin para CU33.
- * Reutiliza tipos existentes; solo define nuevos si son específicos de admin.
- */
-
-import { TallerResponse, TallerCreate, IncidentResponse } from '@core/models/workshops.model';
+﻿import { IncidentResponse } from '@core/models/workshops.model';
 import { UserResponse } from '@core/models/identity.model';
-import { AuditLog } from '@features/monitoring/models/monitoring.model';
 
-/**
- * Reutiliza TallerResponse como TallerTenant.
- * No duplicar el modelo; es el mismo concepto en el contexto de tenants.
- */
-export type TallerTenant = TallerResponse;
+export interface TallerTenant {
+  id_taller: string;
+  nombre: string;
+  nit: string;
+  telefono?: string | null;
+  email?: string | null;
+  direccion?: string | null;
+  is_active: boolean;
+  latitud?: number | null;
+  longitud?: number | null;
+}
 
-/**
- * Reutiliza UserResponse como UsuarioTenant.
- */
+export interface TallerTenantCreate {
+  nombre: string;
+  nit: string;
+  telefono?: string | null;
+  email?: string | null;
+  direccion?: string | null;
+  is_active?: boolean | null;
+}
+
 export type UsuarioTenant = UserResponse;
-
-/**
- * Reutiliza IncidentResponse como IncidenteTenant.
- */
 export type IncidenteTenant = IncidentResponse;
 
-/**
- * Reutiliza AuditLog como BitacoraTenant.
- */
-export type BitacoraTenant = AuditLog;
-
-/**
- * Reutiliza TallerCreate para creación de tenants.
- */
-export type TallerTenantCreate = TallerCreate;
-
-/**
- * Payload para crear un usuario asociado a un taller/tenant.
- */
-export interface TenantUserCreate {
-  nombre: string;
-  correo: string;
-  telefono?: string;
-  rol_nombre: string; // 'admin_taller', 'tecnico', 'cliente', etc.
-  id_taller: string;
+export interface BitacoraTenant {
+  id_bitacora: string;
+  id_usuario_actor: string;
+  rol_usuario?: string | null;
+  id_taller?: string | null;
+  id_sucursal_contexto?: string | null;
+  accion: string;
+  descripcion?: string | null;
+  fecha_hora?: string | null;
 }
 
-/**
- * Métricas operacionales de un taller/tenant.
- * Agregadas desde incidentes y datos del sistema.
- */
-export interface MetricaOperacionalTenant {
-  totalIncidentes: number;
-  incidentesAbiertos: number;
-  incidentesCompletados: number;
-  prioridadAlta: number;
-  prioridadMedia: number;
-  prioridadBaja: number;
+export interface ActionResultResponse {
+  success: boolean;
+  message: string;
 }
 
-/**
- * Estado consolidado de un tenant para la pantalla de aislamiento.
- */
+export interface TenantMetricsResponse {
+  total_incidentes: number;
+  incidentes_abiertos: number;
+  total_tecnicos: number;
+  sucursales_activas: number;
+}
+
+export interface TenantIsolationVerificationResult {
+  rol: string;
+  id_taller: string | null;
+  id_sucursal: string | null;
+  puede_acceder: boolean;
+  mensaje: string;
+}
+
 export interface TenantIsolationState {
   tenant: TallerTenant | null;
   usuarios: UsuarioTenant[];
   tecnicos: UsuarioTenant[];
   incidentes: IncidenteTenant[];
-  metricas: MetricaOperacionalTenant;
+  metricas: TenantMetricsResponse;
   bitacora: BitacoraTenant[];
 }
