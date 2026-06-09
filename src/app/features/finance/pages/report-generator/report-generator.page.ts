@@ -56,7 +56,7 @@ import { SpeechRecognitionService } from './services/speech-recognition.service'
   ],
   template: `
     <div class="page-container">
-      <app-page-header title="Generador de Reportes" subtitle="Resumen, exportaci?n y asistente IA." [icon]="historyIcon"></app-page-header>
+      <app-page-header title="Generador de Reportes" subtitle="Resumen, exportación y asistente IA." [icon]="historyIcon"></app-page-header>
 
       <div class="header-actions">
         <button mat-stroked-button type="button"><lucide-icon [img]="historyIcon" [size]="16"></lucide-icon> Historial</button>
@@ -71,9 +71,9 @@ import { SpeechRecognitionService } from './services/speech-recognition.service'
               <label><lucide-icon [img]="fileIcon" [size]="14"></lucide-icon> Tipo de Reporte</label>
               <mat-form-field appearance="outline" class="full-width">
                 <mat-select [ngModel]="selectedType()" (ngModelChange)="selectedType.set($event); onTypeChange()">
-                  <mat-option value="operativo">Auxilios MecÃ¡nicos (Operativo)</mat-option>
-                  <mat-option value="financiero">LiquidaciÃ³n de Comisi?nes (Financiero)</mat-option>
-                  @if (isSuperAdmin()) { <mat-option value="auditoria">Bit?cora de Auditor?a (Seguridad)</mat-option> }
+                  <mat-option value="operativo">Auxilios Mecánicos (Operativo)</mat-option>
+                  <mat-option value="financiero">Liquidación de Comisiones (Financiero)</mat-option>
+                  @if (isSuperAdmin()) { <mat-option value="auditoria">Bitácora de Auditoría (Seguridad)</mat-option> }
                 </mat-select>
               </mat-form-field>
             </div>
@@ -118,7 +118,7 @@ import { SpeechRecognitionService } from './services/speech-recognition.service'
           <mat-card class="sm-glass-card preview-card">
             <div class="panel-head">
               <div><p class="eyebrow">Vista previa</p><h2>{{ previewTitle() }}</h2></div>
-              <p class="panel-subtitle">Datos estimados segÃºn filtros actuales.</p>
+              <p class="panel-subtitle">Datos estimados según filtros actuales.</p>
             </div>
 
             <div class="metric-grid">
@@ -166,7 +166,7 @@ import { SpeechRecognitionService } from './services/speech-recognition.service'
       </div>
 
       <section class="history-section">
-        <div class="section-head"><p class="eyebrow">Historial reciente</p><h3>Ãšltimos reportes generados</h3></div>
+        <div class="section-head"><p class="eyebrow">Historial reciente</p><h3>Últimos reportes generados</h3></div>
         <div class="history-table-wrap">
           <table class="history-table">
             <thead><tr><th>Reporte</th><th>Tipo</th><th>Formato</th><th>Estado</th><th>Fecha</th></tr></thead>
@@ -260,7 +260,7 @@ export class ReportGeneratorPage {
   voicePrompt = signal('');
   isListening = signal(false);
   voiceError = signal('');
-  quickPrompts = ['Genera un reporte financiero por taller', 'Reporte operativo del mes actual', 'Auditor?a de accesos y cambios cr?ticos'];
+  quickPrompts = ['Genera un reporte financiero por taller', 'Reporte operativo del mes actual', 'Auditoría de accesos y cambios críticos'];
 
   range = new FormGroup({
     start: new FormControl<Date | null>(null, [Validators.required]),
@@ -272,12 +272,12 @@ export class ReportGeneratorPage {
 
   onTypeChange() {}
   applyQuickPrompt(prompt: string): void { this.voicePrompt.set(prompt); }
-  previewTitle(): string { return this.selectedType() === 'financiero' ? 'Reporte Financiero' : this.selectedType() === 'auditoria' ? 'Reporte de Auditor?a' : 'Reporte Operativo'; }
+  previewTitle(): string { return this.selectedType() === 'financiero' ? 'Reporte Financiero' : this.selectedType() === 'auditoria' ? 'Reporte de Auditoría' : 'Reporte Operativo'; }
 
-  getPreviewColumns(): string[] { return this.selectedType() === 'financiero' ? ['Fecha', 'Incidente', 'Estado', 'Total', 'Comisi?n', 'Neto'] : this.selectedType() === 'auditoria' ? ['Fecha', 'Usuario', 'Acci?n', 'Descripci?n', 'IP'] : ['Fecha', 'ID', 'Estado', 'Prioridad', 'Resumen IA', 'Tel?fono']; }
-  getPreviewMetrics() { return this.selectedType() === 'financiero' ? [{ label: 'Recaudado', value: 'Bs 12,480', note: 'Global' }, { label: 'Comisi?n', value: 'Bs 1,248', note: '10% estimado' }, { label: 'Neto', value: 'Bs 11,232', note: 'Transferible' }] : this.selectedType() === 'auditoria' ? [{ label: 'Eventos', value: '34', note: '24h' }, { label: 'Alertas', value: '6', note: 'Cr?ticas' }, { label: 'Cumplimiento', value: '99.8%', note: 'Global' }] : [{ label: 'Auxilios', value: '18', note: 'En curso' }, { label: 'Tiempo medio', value: '18 min', note: 'Respuesta' }, { label: 'Talleres activos', value: '9', note: this.selectedWorkshop() ? 'Con taller' : 'Global' }]; }
+  getPreviewColumns(): string[] { return this.selectedType() === 'financiero' ? ['Fecha', 'Incidente', 'Estado', 'Total', 'Comisión', 'Neto'] : this.selectedType() === 'auditoria' ? ['Fecha', 'Usuario', 'Acción', 'Descripción', 'IP'] : ['Fecha', 'ID', 'Estado', 'Prioridad', 'Resumen IA', 'Teléfono']; }
+  getPreviewMetrics() { return this.selectedType() === 'financiero' ? [{ label: 'Recaudado', value: 'Bs 12,480', note: 'Global' }, { label: 'Comisión', value: 'Bs 1,248', note: '10% estimado' }, { label: 'Neto', value: 'Bs 11,232', note: 'Transferible' }] : this.selectedType() === 'auditoria' ? [{ label: 'Eventos', value: '34', note: '24h' }, { label: 'Alertas', value: '6', note: 'Críticas' }, { label: 'Cumplimiento', value: '99.8%', note: 'Global' }] : [{ label: 'Auxilios', value: '18', note: 'En curso' }, { label: 'Tiempo medio', value: '18 min', note: 'Respuesta' }, { label: 'Talleres activos', value: '9', note: this.selectedWorkshop() ? 'Con taller' : 'Global' }]; }
   getPreviewDetails() { const dr = this.range.value.start && this.range.value.end ? `${format(this.range.value.start, 'dd/MM/yyyy')} - ${format(this.range.value.end, 'dd/MM/yyyy')}` : 'Sin rango'; return [{ label: 'Taller', value: this.selectedWorkshop() ? 'Filtrado' : 'Todos' }, { label: 'Periodo', value: dr }]; }
-  getRecentReports() { return [{ name: 'Reporte Operativo', type: 'Operativo', format: 'PDF' as const, status: 'Completado', date: 'Hoy 10:40' }, { name: 'Liquidaci?n', type: 'Financiero', format: 'EXCEL' as const, status: 'Completado', date: 'Ayer 17:20' }, { name: 'Auditor?a', type: 'Seguridad', format: 'HTML' as const, status: 'Completado', date: '12 Jun 2026' }]; }
+  getRecentReports() { return [{ name: 'Reporte Operativo', type: 'Operativo', format: 'PDF' as const, status: 'Completado', date: 'Hoy 10:40' }, { name: 'Liquidación', type: 'Financiero', format: 'EXCEL' as const, status: 'Completado', date: 'Ayer 17:20' }, { name: 'Auditoría', type: 'Seguridad', format: 'HTML' as const, status: 'Completado', date: '12 Jun 2026' }]; }
 
   async export(formatType: 'PDF' | 'EXCEL' | 'HTML') {
     const { start, end } = this.range.value;
@@ -292,20 +292,71 @@ export class ReportGeneratorPage {
       if (this.selectedType() === 'financiero') {
         const raw = await lastValueFrom(this.financeService.getPayments(this.selectedWorkshop() ?? undefined));
         const filtered = raw.filter(p => { const d = new Date(p.fecha_pago || new Date()); return d >= start && d <= end; });
-        columns = ['FECHA', 'ID_INCIDENTE', 'ESTADO', 'MONTO TOTAL', 'COMISIÃ“N (10%)', 'NETO'];
+        columns = ['FECHA', 'ID_INCIDENTE', 'ESTADO', 'MONTO TOTAL', 'COMISIÓN (10%)', 'NETO'];
         tableRows = filtered.map(p => [format(new Date(p.fecha_pago || new Date()), 'dd/MM/yyyy HH:mm'), p.id_incidente.substring(0, 8), p.estado_pago, `${Number(p.monto).toFixed(2)} Bs`, `${Number(p.monto_comision).toFixed(2)} Bs`, `${(Number(p.monto) - Number(p.monto_comision)).toFixed(2)} Bs`]);
         excelData = filtered.map(p => ({ Fecha: format(new Date(p.fecha_pago || new Date()), 'dd/MM/yyyy HH:mm'), Incidente: p.id_incidente, Estado: p.estado_pago, Total: Number(p.monto), Comision: Number(p.monto_comision), Neto: Number(p.monto) - Number(p.monto_comision) }));
       } else if (this.selectedType() === 'operativo') {
         const raw = await lastValueFrom(this.workshopsService.getAssignments());
-        const filtered = raw.filter(i => { const d = new Date(i.fecha_reporte || new Date()); return d >= start && d <= end; });
-        columns = ['FECHA', 'ID', 'ESTADO', 'PRIORIDAD', 'RESUMEN IA', 'TELÃ‰FONO'];
-        tableRows = filtered.map(i => [format(new Date(i.fecha_reporte || new Date()), 'dd/MM/yyyy HH:mm'), i.id_incidente.substring(0, 8), i.estado_incidente, i.prioridad_incidente, i.resumen_ia, i.telefono]);
-        excelData = filtered.map(i => ({ Fecha: format(new Date(i.fecha_reporte || new Date()), 'dd/MM/yyyy HH:mm'), ID: i.id_incidente, Estado: i.estado_incidente, Prioridad: i.prioridad_incidente, Resumen: i.resumen_ia, Telefono: i.telefono }));
+        const rawAny = raw as any;
+        const items: any[] = Array.isArray(rawAny)
+          ? rawAny
+          : Array.isArray(rawAny?.data)
+            ? rawAny.data
+            : Array.isArray(rawAny?.items)
+              ? rawAny.items
+              : Array.isArray(rawAny?.results)
+                ? rawAny.results
+                : Array.isArray(rawAny?.assignments)
+                  ? rawAny.assignments
+                  : Array.isArray(rawAny?.data?.items)
+                    ? rawAny.data.items
+                    : [];
+
+        const filtered = items.filter(i => {
+          const inc = i.incidente ?? i.incident ?? i;
+          const fecha = inc.fecha_reporte ?? i.fecha_reporte ?? i.fecha_asignacion;
+          if (!fecha) return false;
+
+          const d = new Date(fecha);
+          return d >= start && d <= end;
+        });
+
+        columns = ['FECHA', 'ID', 'ESTADO', 'PRIORIDAD', 'RESUMEN IA', 'TELÉFONO'];
+
+        tableRows = filtered.map(i => {
+          const inc = i.incidente ?? i.incident ?? i;
+          const fecha = inc.fecha_reporte ?? i.fecha_reporte ?? i.fecha_asignacion;
+          const id = inc.id_incidente ?? i.id_incidente;
+
+          return [
+            fecha ? format(new Date(fecha), 'dd/MM/yyyy HH:mm') : '-',
+            id?.substring(0, 8) ?? '-',
+            inc.estado_incidente ?? i.estado_asignacion ?? '-',
+            inc.prioridad_incidente ?? '-',
+            inc.resumen_ia ?? '-',
+            inc.telefono ?? '-'
+          ];
+        });
+
+        excelData = filtered.map(i => {
+          const inc = i.incidente ?? i.incident ?? i;
+          const fecha = inc.fecha_reporte ?? i.fecha_reporte ?? i.fecha_asignacion;
+          const id = inc.id_incidente ?? i.id_incidente;
+
+          return {
+            Fecha: fecha ? format(new Date(fecha), 'dd/MM/yyyy HH:mm') : '-',
+            ID: id ?? '-',
+            Estado: inc.estado_incidente ?? i.estado_asignacion ?? '-',
+            Prioridad: inc.prioridad_incidente ?? '-',
+            Resumen: inc.resumen_ia ?? '-',
+            Telefono: inc.telefono ?? '-'
+          };
+        });
       } else {
         const raw = await lastValueFrom(this.monitoringService.getAuditLogs());
         const logs = Array.isArray(raw) ? raw : raw.items ?? [];
         const filtered = logs.filter((l: AuditLog) => { const d = new Date(l.fecha_hora); return d >= start && d <= end; });
-        columns = ['FECHA', 'USUARIO', 'ACCI?N', 'DESCRIPCI?N', 'IP'];
+        columns = ['FECHA', 'USUARIO', 'ACCIÓN', 'DESCRIPCIÓN', 'IP'];
         tableRows = filtered.map((l: AuditLog) => [format(new Date(l.fecha_hora || new Date()), 'dd/MM/yyyy HH:mm'), l.nombre_usuario || 'Desconocido', l.accion, l.descripcion || '-', l.ip]);
         excelData = filtered.map((l: AuditLog) => ({ Fecha: format(new Date(l.fecha_hora || new Date()), 'dd/MM/yyyy HH:mm'), Usuario: l.nombre_usuario || 'Desconocido', Accion: l.accion, Descripcion: l.descripcion || '-', IP: l.ip }));
       }
@@ -314,17 +365,17 @@ export class ReportGeneratorPage {
       if (formatType === 'PDF') this.reportService.exportToPDF(`Reporte ${this.selectedType()} - Smart Mechanic`, columns, tableRows, filename);
       else if (formatType === 'EXCEL') this.reportService.exportToExcel(excelData, filename);
       else this.reportService.exportToHTML(`Reporte ${this.selectedType()} - Smart Mechanic`, columns, tableRows, filename);
-      this.snackBar.open('âœ… Reporte generado con ?xito', 'Cerrar', { duration: 3000 });
+      this.snackBar.open('✅ Reporte generado con éxito', 'Cerrar', { duration: 3000 });
     } catch (error) {
       console.error('Error:', error);
-      this.snackBar.open('Ocurri? un error al generar el reporte', 'Cerrar', { duration: 5000 });
+      this.snackBar.open('Ocurrió un error al generar el reporte', 'Cerrar', { duration: 5000 });
     } finally { this.isGenerating.set(false); }
   }
 
   async dictateAiReport(): Promise<void> {
     this.voiceError.set('');
     if (!this.speechRecognitionService.isSupported()) { this.voiceError.set('Tu navegador no soporta reconocimiento de voz. Prueba con Chrome o Edge.'); return; }
-    if (this.isListening()) { this.voiceError.set('Ya se est? escuchando audio.'); return; }
+    if (this.isListening()) { this.voiceError.set('Ya se está escuchando audio.'); return; }
     try { this.isListening.set(true); this.voicePrompt.set(await this.speechRecognitionService.listenOnce()); } catch (error) { this.voiceError.set(String(error)); } finally { this.isListening.set(false); }
   }
   stopDictation(): void { this.speechRecognitionService.stop(); this.isListening.set(false); }
